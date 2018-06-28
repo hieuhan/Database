@@ -1,0 +1,12 @@
+D:\Projects\CMSLibrary\CMSLibrary\bin\Debug\CMSLibrary.dll
+D:\Projects\CMSLibrary\CMSLibrary\bin\Debug\CMSLibrary.pdb
+D:\Projects\CMSLibrary\CMSLibrary\obj\Debug\CMSLibrary.csprojResolveAssemblyReference.cache
+D:\Projects\CMSLibrary\CMSLibrary\obj\Debug\CMSLibrary.csproj.CoreCompileInputs.cache
+D:\Projects\CMSLibrary\CMSLibrary\obj\Debug\CMSLibrary.pdb
+D:\Projects\CMSLibrary2\CMSLibrary\obj\Debug\CMSLibrary.csprojResolveAssemblyReference.cache
+D:\Projects\CMSLibrary2\CMSLibrary\obj\Debug\CMSLibrary.csproj.CoreCompileInputs.cache
+D:\Projects\CMSLibrary2\CMSLibrary\obj\Debug\CMSLibrary.dll
+D:\Projects\CMSLibrary2\CMSLibrary\obj\Debug\CMSLibrary.pdb
+D:\Projects\CMSLibrary2\CMSLibrary\bin\Debug\CMSLibrary.dll
+D:\Projects\CMSLibrary2\CMSLibrary\bin\Debug\CMSLibrary.pdb
+D:\Projects\CMSLibrary2\CMSLibrary\obj\Debug\CMSLibrary.csproj.CopyComplete
