@@ -1,0 +1,507 @@
+﻿<%------------------------------------------------------------------------------------------
+*  Developer:   huyht
+------------------------------------------------------------------------------------------%>
+<%@ CodeTemplate Src="Utilities.cst.vb" Inherits="Utilities" Encoding="UTF-8" Language="VB" Debug="True" TargetLanguage="VB"%>
+<%@ CodeTemplate Language="VB" TargetLanguage="VB" Description="Generates a very simple business object." %>
+<%@ Property Name="SourceTable" Type="SchemaExplorer.TableSchema" Category="Context" Description="Table that the object is based on." %>
+<%@ Property Name="SingleFileMode" Type="System.Boolean" Category="Options" Default="True" Description="Generate content for a complete cs file instead of just a class." %>
+<%@ Property Name="RootNamespace"  Type="System.String"  Default="SMSSystem.BusinessLayer" Category="Options" %> 
+<%@ Property Name="ConnectionString" Type="System.String" Category="Options" Default="DefaultConnectionString" %>
+<%@ Assembly Name="SchemaExplorer" %>
+<%@ Assembly Name="System.Data" %>
+<%@ Import Namespace="SchemaExplorer" %>
+<%@ Import Namespace="System.Data" %>
+<%@ Map Name="DbDataReader" Src="DbType-DataReaderMethod" Description="DbType to DataReader Method Map" %>
+<%@ Map Name="SqlNativeSqlDb" Src="SqlNativeType-SqlDbType" Description="SqlNativeType to SqlDbType Map" %>
+
+<% If Me.SingleFileMode Then %>
+Imports System.Data.Common
+Imports MTin.Common
+Imports MySql.Data.MySqlClient
+Imports MySql.Data.MySqlClient.MySqlDbType
+Namespace <%= Me.RootNamespace %>
+<% End If %>
+<% Dim helper As TemplateHelper = TemplateHelper.Instance(SourceTable)%> 
+Public Class <%= GetClassName(SourceTable) %>
+   Dim con As MySqlConnection
+        Public Sub New()
+            con = New MySqlConnection(MTin.Common.ConnectionString.MTinConcentrator)
+        End Sub
+
+        Public Sub New(ByVal ConnectionStringName As String)
+            con = New MySqlConnection(ConnectionStringName)
+        End Sub 
+     <% For Each column As RenderedColumn In helper.PrimaryColumns %>
+	Private _<%=column.Name %> As <%=column.SystemType %><%= GetVBVariableDefaultValue(column.Column)%>
+	<% Next %>
+    <% For Each column As RenderedColumn In helper.MemberColumns %>
+    <% 	if (Not column.Name.ToLower().Equals("name")) %>
+	Private _<%=column.Name %> As <%=column.SystemType %><%= GetVBVariableDefaultValue(column.Column)%>
+	<% End If %>
+	<% Next %>
+    <%For Each column As RenderedColumn In helper.ForeignColumns %> 
+	Private _<%=column.Name %> As <%=column.SystemType %><%= GetVBVariableDefaultValue(column.Column)%>
+	<% Next %>  
+    
+    Private _TotalRecord As Int32 = 0
+    Private _OrderField As string = ""
+    
+    #Region "Public Properties"  
+     <% For Each column As RenderedColumn In helper.PrimaryColumns %>
+	Public Property <%=column.Name %> As <%=column.SystemType %>
+		<% 	If (column.Column.DataType = DbType.Object) Then %>
+		Get
+			If (_<%=column.Name %>) Is Nothing Then
+				_<%=column.Name %> = New <%=GetVBVariableType(column.Column)%>()
+			End If
+			
+			Return _<%=column.Name%>
+		End Get
+		<% Else %>
+		Get
+			Return _<%=column.Name%>
+		End Get
+		<% End If %>
+		Set
+			_<%=column.Name%> = Value
+		End Set
+	End Property 
+	<% Next %>
+    <% For Each column As RenderedColumn In helper.MemberColumns %>
+		<% 	if (Not column.Name.ToLower().Equals("name")) %>
+    Public Property <%=column.Name %> As <%=column.SystemType %>
+		<% 	If (column.Column.DataType = DbType.Object) Then %>
+		Get
+			If (_<%=column.Name %> Is Nothing) Then
+				_<%=column.Name %> = New <%=GetVBVariableType(column.Column)%>()
+			End If
+			
+			Return _<%=column.Name%>
+		End Get
+		<% Else %>
+		Get
+			Return _<%=column.Name%>
+		End Get
+		<% End If %>
+		Set
+			_<%=column.Name%> = Value
+		End Set
+	End Property
+    
+	<% End If %>
+	<% Next %>
+    
+    <%For Each column As RenderedColumn In helper.ForeignColumns %> 
+	Public Property <%=column.Name %> As <%=column.SystemType %>
+		Get 
+			Return _<%=column.Name %>
+		End Get
+		Set
+			_<%=column.Name%> = Value
+		End Set
+	End Property
+    
+	<% Next %>
+    
+    Public Property TotalRecord As Int32
+		Get
+			Return _TotalRecord
+		End Get
+		Set
+			_TotalRecord = Value
+		End Set
+	End Property 
+	
+	Public Property OrderField As String
+		Get
+			Return _OrderField
+		End Get
+		Set
+			_OrderField = Value
+		End Set
+	End Property 
+        
+    
+    #End Region
+    
+    #Region "Public Methods" 
+    <%---------------------------------------------------------------------------------------------------%>
+    Public Function <%= GetClassName(SourceTable) %>_Insert() As Integer
+        Dim reVal As Int16 = -1
+        Try
+			Dim cmd As MySqlCommand
+                Dim strSQL As String
+                strSQL = "INSERT INTO <%= GetClassName(SourceTable) %>" + "(
+				<% For i As Integer = 0 To SourceTable.NonPrimaryKeyColumns.Count - 1 %>
+				<% 		if( i = 0)%>
+						strSQL += "<% = GetPropertyName(SourceTable.NonPrimaryKeyColumns(i))%>"
+						<%else%>
+						strSQL += ",<% = GetPropertyName(SourceTable.NonPrimaryKeyColumns(i))%>"
+						<%End If%>
+				<% Next i %>
+                strSQL += ")"
+                strSQL += " VALUES ("
+				<% For i As Integer = 0 To SourceTable.NonPrimaryKeyColumns.Count - 1 %>
+				<% 		if( i = 0)%>
+							strSQL += "?<% = GetPropertyName(SourceTable.NonPrimaryKeyColumns(i))%>"
+						<%else%>
+						strSQL += ",?<% = GetPropertyName(SourceTable.NonPrimaryKeyColumns(i))%>"	
+						<%End If%>
+				<% Next i %>
+				strSQL += " ); select last_insert_id() as NewUniqueId;"
+                cmd = New MySqlCommand(strSQL, con)
+				<% For i As Integer = 0 To SourceTable.NonPrimaryKeyColumns.Count - 1 %>  
+				<% Select Case SourceTable.NonPrimaryKeyColumns(i).DataType %>
+				<% Case DbType.Date, DbType.DateTime  %> 
+				cmd.Parameters.Add("<%= GetPropertyName(SourceTable.NonPrimaryKeyColumns(i)) %>", MySqlDbType.<%= GetDbType(SourceTable.NonPrimaryKeyColumns(i)) %>).Value = IIf(<%= GetPropertyName(SourceTable.NonPrimaryKeyColumns(i)) %> = DateTime.MinValue, DBNull.Value, <%= GetPropertyName(SourceTable.NonPrimaryKeyColumns(i)) %> 
+				<% Case Else %>
+				cmd.Parameters.Add("<%= GetPropertyName(SourceTable.NonPrimaryKeyColumns(i)) %>", MySqlDbType.<%= GetDbType(SourceTable.NonPrimaryKeyColumns(i)) %>).Value = <%= GetPropertyName(SourceTable.NonPrimaryKeyColumns(i)) %> 
+				<% End Select %>  
+				<% Next i %>
+                con.Open()
+                cmd.ExecuteNonQuery()            
+        Catch ex As Exception
+            LogFile.WriteLog(Me.GetType.FullName & ": " & ex.ToString)
+        End Try 
+        Return reVal
+    End Function  
+    
+    <%---------------------------------------------------------------------------------------------------%>
+    Public Function <%= GetClassName(SourceTable) %>_Update() As Int16
+        Dim reVal As Int16 = -1
+        Try
+			          
+           Dim cmd As MySqlCommand
+                Dim strSQL As String
+                strSQL = "UPDATE <%= GetClassName(SourceTable) %> SET "
+				<% For i As Integer = 0 To SourceTable.NonPrimaryKeyColumns.Count - 1 %>
+				<% 		if( i = 0)%>
+							strSQL += "<% = GetPropertyName(SourceTable.NonPrimaryKeyColumns(i))%> = ?<% = GetPropertyName(SourceTable.NonPrimaryKeyColumns(i))%>" 
+						<%else%>
+							strSQL += ", <% = GetPropertyName(SourceTable.NonPrimaryKeyColumns(i))%> = ?<% = GetPropertyName(SourceTable.NonPrimaryKeyColumns(i))%>" 
+						<%End If%>
+				<% Next i %>
+				strSQL += " WHERE  <%= SourceTable.PrimaryKey.MemberColumns(0).Name %> = " + <%= SourceTable.PrimaryKey.MemberColumns(0).Name %>.tostring
+                cmd = New MySqlCommand(strSQL, con)
+				<% For i As Integer = 0 To SourceTable.NonPrimaryKeyColumns.Count - 1 %>  
+				<% Select Case SourceTable.NonPrimaryKeyColumns(i).DataType %>
+				<% Case DbType.Date, DbType.DateTime  %> 
+				cmd.Parameters.Add("<%= GetPropertyName(SourceTable.NonPrimaryKeyColumns(i)) %>", MySqlDbType.<%= GetDbType(SourceTable.NonPrimaryKeyColumns(i)) %>).Value = IIf(<%= GetPropertyName(SourceTable.NonPrimaryKeyColumns(i)) %> = DateTime.MinValue, DBNull.Value, <%= GetPropertyName(SourceTable.NonPrimaryKeyColumns(i)) %> 
+				<% Case Else %>
+				cmd.Parameters.Add("<%= GetPropertyName(SourceTable.NonPrimaryKeyColumns(i)) %>", MySqlDbType.<%= GetDbType(SourceTable.NonPrimaryKeyColumns(i)) %>).Value = <%= GetPropertyName(SourceTable.NonPrimaryKeyColumns(i)) %> 
+				<% End Select %>  
+				<% Next i %>
+                con.Open()
+                cmd.ExecuteNonQuery()  
+        Catch  ex As Exception
+            LogFile.WriteLog(Me.GetType.FullName & ": " & ex.ToString)
+        End Try
+        Return reVal 
+    End Function   
+    
+    <%---------------------------------------------------------------------------------------------------%>
+    Public Function <%= GetClassName(SourceTable) %>_Delete() As Int16
+        Dim reVal As Int16 = -1
+        Try
+            Dim cmd As MySqlCommand
+            Dim strSQL As String
+            strSQL = "DELETE FROM <%= GetClassName(SourceTable) %>   "
+			strSQL += "WHERE  <%= SourceTable.PrimaryKey.MemberColumns(0).Name %> = " + <%= SourceTable.PrimaryKey.MemberColumns(0).Name %>.tostring
+            cmd = New MySqlCommand(strSQL, con)				
+            con.Open()
+            cmd.ExecuteNonQuery()  
+        Catch  ex As Exception
+            LogFile.WriteLog("<%= Me.RootNamespace %>.<%= GetClassName(SourceTable) %>.<%= GetClassName(SourceTable) %>_Delete: " & ex.ToString)
+        End Try 
+        Return reVal
+    End Function 
+    
+    <%---------------------------------------------------------------------------------------------------%>
+    Public Function <%= GetClassName(SourceTable) %>_GetByID() As <%= GetClassName(SourceTable) %>
+        Try
+            Dim cmd As MySqlCommand
+            Dim strSQL As String
+            strSQL = "SELECT * FROM <%= GetClassName(SourceTable) %>   "
+			strSQL += "WHERE  <%= SourceTable.PrimaryKey.MemberColumns(0).Name %> = " + <%= SourceTable.PrimaryKey.MemberColumns(0).Name %>.tostring
+            cmd = New MySqlCommand(strSQL, con)				
+            Dim arrReturn As ArrayList = Init(cmd)
+            If arrReturn.Count > 0 Then
+                Return CType(arrReturn(0), <%= GetClassName(SourceTable) %>)
+            End If
+        Catch ex As Exception 
+            LogFile.WriteLog(Me.GetType.FullName & ": " & ex.ToString)
+        End Try
+        Return New <%= GetClassName(SourceTable) %>
+    End Function  
+    
+    <%---------------------------------------------------------------------------------------------------%>
+    Public Function <%= GetClassName(SourceTable) %>_GetList_ALL() As ArrayList
+        Try
+            Dim cmd As MySqlCommand
+            Dim strSQL As String
+            strSQL = "SELECT * FROM <%= GetClassName(SourceTable) %>   " + OrderField
+			cmd = New MySqlCommand(strSQL, con)	
+            Return Init(cmd)
+        Catch ex As Exception 
+            LogFile.WriteLog(Me.GetType.FullName & ": " & ex.ToString)
+        End Try
+        Return Nothing
+    End Function
+    
+    Public Function <%= GetClassName(SourceTable) %>_GetList_NA() As ArrayList
+        Try
+            Dim cmd As MySqlCommand
+            Dim strSQL As String
+            strSQL = "SELECT * FROM <%= GetClassName(SourceTable) %>   " + OrderField
+			cmd = New MySqlCommand(strSQL, con)	
+            Return Init(cmd)
+        Catch ex As Exception 
+            LogFile.WriteLog(Me.GetType.FullName & ": " & ex.ToString)
+        End Try
+        Return Nothing
+    End Function
+    
+    <%---------------------------------------------------------------------------------------------------%>
+    Public Function <%= GetClassName(SourceTable) %>_Search( ByVal PageSize As Integer, ByVal PageNumber As Integer) As ArrayList
+        Try
+            Dim cmd As MySqlCommand
+			Dim strSQL,strCount As String
+			Dim Limit,Start As integer
+			Limit = PageSize * PageNumber
+			Start = PageSize * (PageNumber-1)
+            strSQL = "SELECT * FROM <%= GetClassName(SourceTable) %> WHERE "
+			<% For i As Integer = 0 To SourceTable.NonPrimaryKeyColumns.Count - 1 %>
+			<% 		if( i = 0)%>
+						strSQL += "(<% = GetPropertyName(SourceTable.NonPrimaryKeyColumns(i))%> = ?<% = GetPropertyName(SourceTable.NonPrimaryKeyColumns(i))%>)" 
+					<%else%>
+						strSQL += " AND (<% = GetPropertyName(SourceTable.NonPrimaryKeyColumns(i))%> = ?<% = GetPropertyName(SourceTable.NonPrimaryKeyColumns(i))%>)" 
+					<%End If%>
+			<% Next i %>
+			strCount = strSQL.Replace("SELECT * FROM <%= GetClassName(SourceTable) %> WHERE ", "SELECT Count(*) FROM <%= GetClassName(SourceTable) %> WHERE ")
+			strSQL += OrderField + " limit  " + Start.ToString + "," + Limit.ToString 
+			'======= counter ==============
+                cmd = New MySqlCommand(strCount, con)
+                con.Open()
+                TotalRecord = CInt(cmd.ExecuteScalar)
+            '==================================
+            cmd = New MySqlCommand(strSQL, con)
+			<% For i As Integer = 0 To SourceTable.NonPrimaryKeyColumns.Count - 1 %>  
+			<% Select Case SourceTable.NonPrimaryKeyColumns(i).DataType %>
+			<% Case DbType.Date, DbType.DateTime  %> 
+			cmd.Parameters.Add("<%= GetPropertyName(SourceTable.NonPrimaryKeyColumns(i)) %>", MySqlDbType.<%= GetDbType(SourceTable.NonPrimaryKeyColumns(i)) %>).Value = IIf(<%= GetPropertyName(SourceTable.NonPrimaryKeyColumns(i)) %> = DateTime.MinValue, DBNull.Value, <%= GetPropertyName(SourceTable.NonPrimaryKeyColumns(i)) %> 
+			<% Case Else %>
+			cmd.Parameters.Add("<%= GetPropertyName(SourceTable.NonPrimaryKeyColumns(i)) %>", MySqlDbType.<%= GetDbType(SourceTable.NonPrimaryKeyColumns(i)) %>).Value = <%= GetPropertyName(SourceTable.NonPrimaryKeyColumns(i)) %> 
+			<% End Select %>  
+			<% Next i %>
+        
+            Return Init(cmd, True)
+        Catch ex As Exception 
+            LogFile.WriteLog(Me.GetType.FullName & ": " & ex.ToString)
+        End Try  
+        Return Nothing
+    End Function 
+    
+    <%---------------------------------------------------------------------------------------------------%>
+    Private Function Init(ByVal cmd As MySqlCommand, Optional ByVal hasExtensionProperty As Boolean = False) As ArrayList 
+        Dim arr<%= GetClassName(SourceTable) %> As New ArrayList
+        Try
+            con.Open()
+            cmd.ExecuteReader()
+            Dim dr As MySqlDataReader = cmd.ExecuteReader()
+            While dr.Read() 
+                Dim obj<%= GetClassName(SourceTable) %> As New <%= GetClassName(SourceTable) %>
+                <% For i As Integer = 0 To SourceTable.Columns.Count - 1 %> 
+                If Not dr("<%= GetPropertyName(SourceTable.Columns(i)) %>") Is DBNull.Value Then obj<%= GetClassName(SourceTable) %>.<%= GetPropertyName(SourceTable.Columns(i)) %> = dr("<%= GetPropertyName(SourceTable.Columns(i)) %>")
+                <% Next i %>  
+                If hasExtensionProperty Then
+
+                End If
+                arr<%= GetClassName(SourceTable) %>.Add(obj<%= GetClassName(SourceTable) %>) 
+            End While
+            If dr.NextResult() Then
+                If dr.HasRows Then
+                    dr.Read()
+                    TotalRecord=dr(0)
+                End If
+            End If
+        Catch ex As Exception 
+            LogFile.WriteLog(Me.GetType.FullName & ": " & ex.ToString)
+        End Try
+            Return arr<%= GetClassName(SourceTable) %>
+        End Function
+        
+        <%---------------------------------------------------------------------------------------------------%>
+    #End Region
+End Class
+ 
+<% If Me.SingleFileMode Then %>
+End Namespace
+<% End If %>
+
+<script runat="template">
+
+Public Function GetMemberVariableDeclarationStatement(ByVal column As ColumnSchema) As String
+	Return GetMemberVariableDeclarationStatement("Private", column)
+End Function
+
+Public Function GetMemberVariableDeclarationStatement(ByVal protectionLevel As String, ByVal column As ColumnSchema) As String
+	Dim statement As String = protectionLevel + " Dim "
+	statement += GetMemberVariableName(column) + " As " + column.SystemType.ToString()
+
+	Dim defaultValue As String = GetMemberVariableDefaultValue(column)
+	If defaultValue <> "" Then
+		statement += " = " + defaultValue
+	End If
+
+	Return statement
+End Function
+
+Public Function GetCamelCaseName(ByVal value As String) As String
+	Return value.Substring(0, 1).ToLower() + value.Substring(1) 
+End Function
+
+Public Function GetMemberVariableName(ByVal column As ColumnSchema) As String
+	Dim propertyName As String = GetPropertyName(column)
+	Dim memberVariableName As String = "_" + GetCamelCaseName(propertyName)
+
+	Return memberVariableName
+End Function
+
+Public Function GetPropertyName(ByVal column As ColumnSchema) As String
+	Dim propertyName As String = column.Name
+
+	If propertyName = column.Table.Name + "Name" Then
+		Return "Name"
+	End If
+	If propertyName = column.Table.Name + "Description" Then
+		Return "Description"
+	End If
+
+	If propertyName.EndsWith("TypeCode") Then
+		propertyName = propertyName.Substring(0, propertyName.Length - 4)
+	End If
+
+	Return propertyName
+End Function
+
+Public Function GetMemberVariableDefaultValue(ByVal column As ColumnSchema) As String
+	Select Case column.DataType
+		Case DbType.Guid
+			Return "Guid.Empty"
+		Case DbType.AnsiString, DbType.AnsiStringFixedLength, DbType.[String], DbType.StringFixedLength 
+			Return "String.Empty"
+		Case Else
+			Return ""
+	End Select
+End Function
+
+Public Function GetReaderMethod(ByVal column As ColumnSchema) As String
+	Return DbDataReader(column.DataType.ToString())
+End Function
+
+Public Function GetClassName(ByVal table As TableSchema) As String
+	'If table.Name.EndsWith("s") Then
+		'Return table.Name.Substring(0, table.Name.Length - 1)
+	'Else
+		Return table.Name
+	'End If
+End Function
+
+Public Function GetSqlDbType(ByVal column As ColumnSchema) As String
+	Return SqlNativeSqlDb(column.NativeType.ToString())
+End Function
+
+Public Function GeneratePrimaryParameters(ByVal table As TableSchema) As String 
+    if table.HasPrimaryKey  then
+       return "ByVal " & table.PrimaryKey.MemberColumns(0).Name & " As " & GetDbType(table.PrimaryKey.MemberColumns(0)) 
+    end if  
+End Function
+
+Public Function GenerateParameters(ByVal table As TableSchema) As String
+	dim reval as string=""
+    
+    if table.HasPrimaryKey  then
+        reval="ByVal " & table.PrimaryKey.MemberColumns(0).Name & " As " & GetDbType(table.PrimaryKey.MemberColumns(0)) & ","
+    end if 
+    
+    For i As Integer = 0 To table.NonPrimaryKeyColumns.Count - 1
+     reval = reval & "ByVal " &  GetPropertyName(table.NonPrimaryKeyColumns(i)) & " As " &  GetDbType(table.NonPrimaryKeyColumns(i)) & ","
+    Next i
+    
+    If len(reval)>0
+        reval=left(reval,len(reval)-1)
+    end if
+    
+    return reval
+End Function 
+'here is GetDbType
+Public Function GetDbType(ByVal column As ColumnSchema) As String 
+	'return  LCase(SqlNativeSqlDb(column.NativeType.ToString())) 
+    return GetParameterSystemType(column) 
+End Function
+
+Public Function GetDbType2(ByVal column As ColumnSchema) As String  
+    Dim reVal as string=""
+	 return  LCase(SqlNativeSqlDb(column.NativeType.ToString())) 
+    select case LCase(SqlNativeSqlDb(column.NativeType.ToString()))
+        case "decimal"
+            reVal = "Decimal"
+        case "float"
+             reVal = "Decimal"
+        case "int"
+             reVal = "i"
+        case "bigint"
+             reVal = "Int64"
+        case "bit"
+             reVal = "Boolean"
+        case "char"
+             reVal = "String"
+        case "nvarchar"
+             reVal = "String"
+        case "varchar"
+             reVal = "String"
+        case "ntext"
+             reVal = "String"
+        case "numeric"
+             reVal = "Decimal"
+        case "nchar"
+             reVal = "String"
+        case "tinyint"
+             reVal = "Int16"
+        case "uniqueidentifier" 
+             reVal = "String" 
+    end select 
+	
+    return  reVal 
+End Function
+
+Public Function GetParameterSystemType(ByVal column As ColumnSchema) As String
+    'return replace(column.SystemType.ToString,"System.","") 
+    dim reVal as string = replace(column.SystemType.ToString,"System.","")
+    
+    'if lcase(reVal)="datetime" then
+    '    return "String"
+    'else
+    '    return reval
+    'end if
+    return reVal
+    
+End Function
+
+Public Function GetPrimaryKeyType(ByVal table As TableSchema) As String
+	If Not IsNothing(table.PrimaryKey) Then
+		If table.PrimaryKey.MemberColumns.Count = 1 Then
+			Return table.PrimaryKey.MemberColumns(0).SystemType.ToString()
+		Else
+			Throw New ApplicationException("This template will not work on primary keys with more than one member column.")
+		End If
+	Else
+		Throw New ApplicationException("This template will only work on tables with a primary key.")
+	End If
+End Function
+
+Public Overloads Overrides Function GetFileName() As String
+	Return Me.GetClassName(Me.SourceTable) + ".vb"
+End Function
+
+</script>

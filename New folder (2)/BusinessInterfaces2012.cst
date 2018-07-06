@@ -1,0 +1,232 @@
+﻿<%------------------------------------------------------------------------------------------
+*  Developer:   huyht
+------------------------------------------------------------------------------------------%>
+<%@ CodeTemplate Language="VB" TargetLanguage="VB" Encoding="UTF-8" Description="Generates a very simple business object." %>
+<%@ Property Name="SourceTable" Type="SchemaExplorer.TableSchema" Category="Context" Description="Table that the object is based on." %>
+<%@ Property Name="RootNamespace"  Type="System.String"  Default="" Category="Options" %> 
+<%@ Property Name="TablePrefix"  Type="System.String"  Default="" Category="Options" %>
+<%@ Assembly Name="SchemaExplorer" %>
+<%@ Assembly Name="System.Data" %>
+<%@ Import Namespace="SchemaExplorer" %>
+<%@ Import Namespace="System.Data" %>
+<%@ Map Name="DbDataReader" Src="DbType-DataReaderMethod" Description="DbType to DataReader Method Map" %>
+<%@ Map Name="SqlNativeSqlDb" Src="SqlNativeType-SqlDbType" Description="SqlNativeType to SqlDbType Map" %> 
+<%%@ Page Language="C#" MasterPageFile="~/admin/MasterPageAdmin.master" AutoEventWireup="true" CodeFile="<%= SourceTable.Name %><%= Me.TablePrefix %>.aspx.cs" Inherits="page_admin_<%= SourceTable.Name %>" Title="" %%>
+<%%@ Register Assembly="AjaxControlToolkit" Namespace="AjaxControlToolkit" TagPrefix="ajaxtoolkit" %%>
+<%%@ Register Src="~/admin/UserControls/CustomPaging.ascx" TagName="CustomPaging" TagPrefix="uc1" %%>
+<%%@ Import Namespace="ICSoft.CMSLib" %%>
+<%%@ Import Namespace="ICSoft.HelperLib" %%>
+<asp:Content ID="contentAccountType" runat="server" ContentPlaceHolderID="m_contentBody">
+    <script type="text/javascript">
+        $(document).ready(function () {
+            var prm = Sys.WebForms.PageRequestManager.getInstance();
+            prm.add_initializeRequest(InitializeRequest);
+            prm.add_endRequest(EndRequest);
+
+            $('a#popup').live('click', function (e) {
+                var page = $(this).attr("href")
+                var cdialog = $('<div id="divEdit"></div>')
+                .html('<iframe id="ifEdit" style="border: 0px; " src="' + page + '" width="98%" height="98%"></iframe>')
+                .dialog({
+                    autoOpen: false,
+                    modal: true,
+                    height: 420,
+                    width: 580,
+                    title: $(this).attr("title"),
+                    close: function (event, ui) {
+                        $(this).remove();
+                        window.location = $('#<%%= btnSearch.ClientID %%>').attr("href");
+                    }
+                });
+                cdialog.dialog('open');
+                e.preventDefault();
+            });
+        });
+    function InitializeRequest(sender, args) {
+    }
+
+    function EndRequest(sender, args) {
+        
+    }
+    </script>
+    <asp:UpdatePanel ID="upn_Grid" runat="server">
+        <Triggers>
+            <asp:PostBackTrigger ControlID="btnSearch" />
+        </Triggers>
+        <ContentTemplate>
+        <table cellpadding="3" cellspacing="3" class="tableBorder" style="width: 98%;" >
+            <tr>
+            <td>
+            <table cellpadding="3" cellspacing="3" style="width: 100%;">
+                <% For i As Integer = 0 To SourceTable.ForeignKeyColumns.Count - 1 %> 
+                <tr>
+                    <td style="width:90px; white-space:nowrap;">
+                        <%= Iif(SourceTable.ForeignKeyColumns(i).Description<>"",SourceTable.ForeignKeyColumns(i).Description,SourceTable.ForeignKeyColumns(i).Name.Replace("Id","s")) %>:
+                    </td>
+                    <td style="width:260px"> 
+                    <asp:DropDownList onselectedindexchanged="ddl<%= SourceTable.ForeignKeyColumns(i).Name %>_SelectedIndexChanged"  ID="ddl<%= SourceTable.ForeignKeyColumns(i).Name %>" DataTextField="<%= SourceTable.ForeignKeyColumns(i).Name.Replace("Id","Desc") %>" DataValueField="<%= SourceTable.ForeignKeyColumns(i).Name %>" 
+                    CssClass="userselect" runat="server" AutoPostBack="True">
+                    </asp:DropDownList>
+                    </td>
+                    <td style="width:90px; white-space:nowrap;">
+                        
+                    </td>
+                    <td>
+                       
+                    </td>
+                </tr> 
+                <% Next i %>
+                <tr>
+                    <td style="width:90px; white-space:nowrap;">
+                        Sắp xếp:</td>
+                    <td style="width:260px"> 
+                        <asp:DropDownList onselectedindexchanged="ddlOrderBy_SelectedIndexChanged" ID="ddlOrderBy" 
+                        CssClass="userselect" runat="server" AutoPostBack="True">
+                        <asp:ListItem Value="<%=SourceTable.PrimaryKey.MemberColumns(0).Name%> DESC">Mới thêm</asp:ListItem>
+                        </asp:DropDownList>
+                    </td>
+                    <td style="width:90px; white-space:nowrap;">
+                        
+                    </td>
+                    <td >
+                       
+                    </td>
+                </tr> 
+                <tr>
+                    <td style="width:90px; white-space:nowrap;">
+                        Từ khóa:
+                    </td>
+                    <td style="width:260px">
+                       <asp:TextBox ID="txtSearch" runat="server" CssClass="tukhoatimekiem input-filter"></asp:TextBox>
+                    </td>
+                    <td style="width:90px; white-space:nowrap;">
+                        <asp:LinkButton ID="btnSearch" runat="server" CssClass="timkiembutom" 
+                        Text="Tìm kiếm" meta:resourcekey="btnSearch" onclick="btnSearch_Click">
+                        </asp:LinkButton>
+                    </td>
+                    <td>
+                       
+                    </td>
+                </tr>
+            </table>
+            <div class="clear5px"></div>
+        	<div class="vien"></div>
+        	<div class="clear5px"></div>  
+            <div class="khungchucnang">
+            <div class="chucnangleft">
+        		<span class="tieudetongcong">
+                    <asp:Label ID="lblTotalText" runat="server" Text="Tổng cộng:" meta:resourcekey="lblTotalText"></asp:Label>
+                </span>
+                <asp:Label ID="lblTong" runat="server" Text="" CssClass="tieudetongcong2"></asp:Label> 
+        	</div>
+        	<div class="chucnangright">
+                <asp:LinkButton ID="lbDelete" runat="server" CssClass="xoatin" Text="Xóa"  OnClientClick="return confirm('Bạn có chắc muốn xóa toàn bộ dữ liệu đã chọn?')"
+                    meta:resourcekey="lbDelete" onclick="lbDelete_Click">
+                </asp:LinkButton>
+                <asp:LinkButton ID="lbUnCheck" runat="server" CssClass="boduyet" 
+                    Text="Bỏ duyệt" meta:resourcekey="lbUnCheck" onclick="lbUnCheck_Click"> 
+                </asp:LinkButton>
+                <asp:LinkButton ID="lbReview" runat="server" CssClass="duyettin" Text="Duyệt" 
+                    meta:resourcekey="lbReview" onclick="lbReview_Click"> 
+                </asp:LinkButton>					
+        		<a id="popup"  href="<%= SourceTable.Name %><%= Me.TablePrefix %>Edit.aspx" title="Thêm mới " class="themmoi" > 
+                    <asp:Label ID="lblAddNew" runat="server" Text="Thêm mới" meta:resourcekey="lblAddNew"></asp:Label>
+                </a>
+        	</div>
+            <div style="text-align:left; width:200px; float:right">
+                <asp:UpdateProgress ID="UpdateProgress1" AssociatedUpdatePanelID="upn_Grid" runat="server">
+                    <ProgressTemplate>
+                        <img style="text-align:center; vertical-align:middle" alt="loading..." src="../../Icons/loading.gif" /> Loading...
+                    </ProgressTemplate>
+                </asp:UpdateProgress>
+            </div>
+        	<div class="clear5px"></div>
+            <div class="contenbangdulieu">
+                <asp:GridView ID="m_grid" DataKeyNames="<%=SourceTable.PrimaryKey.MemberColumns(0).Name%>" runat="server" ShowHeaderWhenEmpty="True"
+                    AutoGenerateColumns="False" CssClass="filter-table" OnRowDeleting="m_grid_RowDeleting"
+                    Width="100%" CellPadding="0" CellSpacing="0" BorderWidth="0" PageSize="50" >
+                    <HeaderStyle CssClass="trbangdulieutieude" />
+                    <FooterStyle CssClass="grid_foot" />
+                    <RowStyle CssClass="trbangdulieutieudenoidung" />
+                    <AlternatingRowStyle CssClass="trbangdulieutieudenoidung" />
+                    <SelectedRowStyle CssClass="trbangdulieutieudenoidung" />
+                    <EditRowStyle CssClass="trbangdulieutieudenoidung" />
+                    <PagerStyle CssClass="grid_page" />
+                    <Columns>
+                        <asp:TemplateField HeaderText="#">
+                            <ItemTemplate>
+                            <asp:Label ID="lbNo" runat="server" Text='<%%# Container.DataItemIndex + (CustomPaging.PageIndex - 1) * m_grid.PageSize + 1%%>' 
+                             ToolTip ='<%%# Eval("<%=SourceTable.PrimaryKey.MemberColumns(0).Name%>").ToString() %%>' >                                    
+                            </asp:Label>
+                            </ItemTemplate>      
+                            <ItemStyle Width="5%" />            
+                        </asp:TemplateField>        
+            <% For i As Integer = 0 To SourceTable.Columns.Count - 1 %> 
+            <%   
+            Select Case SourceTable.Columns(i).DataType %>
+                   <% Case DbType.Guid %>
+                   <% Case DbType.AnsiString, DbType.AnsiStringFixedLength, DbType.[String], DbType.StringFixedLength %> 
+                         <asp:TemplateField HeaderText="<%= Iif(SourceTable.Columns(i).Description<>"",SourceTable.Columns(i).Description,SourceTable.Columns(i).Name) %>">  
+                            <ItemTemplate> 
+                                <asp:Literal ID="lt<%= SourceTable.Columns(i).Name %>" runat="server" EnableViewState="false" Text='<%%# Eval("<%= SourceTable.Columns(i).Name %>") %%>'></asp:Literal> 
+                            </ItemTemplate>
+                            <ItemStyle  HorizontalAlign="Left" />
+                        </asp:TemplateField> 
+                      <% Case DbType.Date, DbType.DateTime  %>
+                       <asp:TemplateField HeaderText="<%= Iif(SourceTable.Columns(i).Description<>"",SourceTable.Columns(i).Description,SourceTable.Columns(i).Name) %>">  
+                            <ItemTemplate>  
+                             <asp:Literal ID="lt<%= SourceTable.Columns(i).Name %>" runat="server" EnableViewState="false" Text='<%%# String.Format("{0:dd/MM/yyyy}", Eval("<%= SourceTable.Columns(i).Name %>")) %%>'></asp:Literal> 
+                            </ItemTemplate>
+                            <ItemStyle  HorizontalAlign="Left" />
+                        </asp:TemplateField>
+                    <% Case DbType.Boolean %>
+                       <asp:TemplateField HeaderText="<%= Iif(SourceTable.Columns(i).Description<>"",SourceTable.Columns(i).Description,SourceTable.Columns(i).Name) %>">  
+                            <ItemTemplate>  
+                            <asp:CheckBox ID="chkg<%= SourceTable.Columns(i).Name %>" runat="server" EnableViewState="false" Checked='<%%# Eval("<%= SourceTable.Columns(i).Name %>") %%>' />
+                            </ItemTemplate>
+                            <ItemStyle  HorizontalAlign="Left" />
+                        </asp:TemplateField>
+                    <% Case Else %>
+                        <asp:TemplateField HeaderText="<%= Iif(SourceTable.Columns(i).Description<>"",SourceTable.Columns(i).Description,SourceTable.Columns(i).Name) %>">  
+                            <ItemTemplate> 
+                                <asp:Literal ID="lt<%= SourceTable.Columns(i).Name %>" runat="server" EnableViewState="false" Text='<%%# <%=Iif(SourceTable.Columns(i).IsForeignKeyMember,SourceTable.Columns(i).Name.Replace("Id","s") & ".Get" & SourceTable.Columns(i).Name.Replace("Id","") & "Name(byte.Parse(","")%>Eval("<%= SourceTable.Columns(i).Name %>").ToString()<%=Iif(SourceTable.Columns(i).IsForeignKeyMember,"))","")%> %%>'></asp:Literal> 
+                            </ItemTemplate>
+                            <ItemStyle  HorizontalAlign="Left" />
+                        </asp:TemplateField>
+            <% End Select %> 
+            <% Next i %>                               
+                        <asp:TemplateField HeaderText="Sửa">
+                            <ItemStyle HorizontalAlign="center"  Wrap="false" />
+                            <HeaderStyle Width="6%" />
+                            <ItemTemplate>
+                                <a id="popup" href='<%= SourceTable.Name %><%= Me.TablePrefix %>Edit.aspx?id=<%%# Eval("<%=SourceTable.PrimaryKey.MemberColumns(0).Name%>") %%>' class="iconadmsua" ></a>
+                                <asp:LinkButton ID="lbtDelete" runat="server" CausesValidation="False" OnClientClick="return confirm('Bạn có chắc muốn xóa dữ liệu này?');"
+                                    CommandName="Delete" Text="" CssClass="iconadmxoa" ></asp:LinkButton>
+                            </ItemTemplate>
+                        </asp:TemplateField>
+                        <asp:TemplateField>
+                            <ItemStyle HorizontalAlign="Center" Width="40px" />
+                            <HeaderTemplate>
+                                <input type="checkbox" name="SelectAllCheckBox" onclick="SelectAll(this)">
+                            </HeaderTemplate>
+                            <ItemTemplate>
+                                <asp:CheckBox ID="chkAction" runat="server"></asp:CheckBox>
+                            </ItemTemplate>
+                        </asp:TemplateField>
+                    </Columns>
+                </asp:GridView>                  
+            </div>
+            <div class="clear5px"></div>    
+            <uc1:CustomPaging ID="CustomPaging" runat="server" />                
+            <div class="clear5px"></div>   
+          </div>
+          </td>
+          </tr>
+          </table>
+        </ContentTemplate>
+    </asp:UpdatePanel>
+</asp:Content>
+
+ <script runat="template"> 
+
+</script>

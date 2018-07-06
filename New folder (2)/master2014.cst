@@ -1,0 +1,111 @@
+﻿<%------------------------------------------------------------------------------------------
+*  Developer:   huyht
+------------------------------------------------------------------------------------------%>
+<%@ CodeTemplate Src="Master.vb" Inherits="Master" Language="VB" Encoding="UTF-8" Debug="True" TargetLanguage="VB"%> 
+<%@ Property Name="SourceTable" Type="SchemaExplorer.TableSchema" Category="DatabaseSettings" Description="Current table targeted for generation." Optional="true"%>
+<%@ Property Name="RootNamespace" Type="String" Default="cms.Lib" Category="Namespaces" %> 
+<%@ Property Name="TablePrefix"  Type="System.String"  Default="" Category="Options"  Optional="true"%>
+<%@ Register Name="BusinessInterfaces" Template="BusinessInterfaces2014.cst"%>
+<%@ Register Name="BusinessInterfacesCodeBehind" Template="BusinessInterfacesCodeBehind2014.cst"%>
+<%@ Register Name="BusinessInterfacesEdit" Template="BusinessInterfacesEdit2014.cst"%>
+<%@ Register Name="BusinessInterfacesCodeBehindEdit" Template="BusinessInterfacesCodeBehindEdit2014.cst"%>
+<%@ Register Name="BusinessInterfacesDesign" Template="BusinessInterfacesDesign.cst"%>
+<%@ Register Name="BusinessObjectEnterprise" Template="BusinessObjectEnterpriseTrans2014.cst"%>  
+<%@ Assembly Name="SchemaExplorer"%>
+<%@ Assembly Name="System.Design"%>
+<%@ Import NameSpace="System.IO"%>
+<%@ Import NameSpace="System.Text"%>
+<%@ Import NameSpace="SchemaExplorer"%>
+
+<script runat="template">
+
+#region "Private variables"
+
+Private _currentStep As Integer = 0
+Private applicationDirectory As String = [String].Empty
+#End Region
+
+#region "Public methods"
+
+Public Overloads Overrides Sub Render(ByVal writer As TextWriter)
+	Dim startTime As DateTime = DateTime.Now
+	applicationDirectory = Me.CodeOutput
+
+	If (Nothing Is Me.SourceTable) Then
+		Throw New Exception("You must choose either a SourceTable to generate code.")
+	End If
+
+	If Not Directory.Exists(applicationDirectory) Then
+		Trace.WriteLine("Creating Application directory...")
+		Directory.CreateDirectory(applicationDirectory)
+	End If
+
+	Data_Render()
+End Sub
+
+Public Sub OnProgress(ByVal sender As Object, ByVal e As ProgressEventArgs)
+	If e.Value > 0 Then
+		Me.Progress.Value = 75 + (_currentStep * 100) + CInt(CDbl(e.Value)/ CDbl(e.MaximumValue * 100))
+	End If
+End Sub
+#End Region
+
+#region "Private methods"
+
+Private Sub Data_Render()
+	Dim dataAbstractionDirectory As String = String.Concat(applicationDirectory, "\Generated")
+
+	If Not Directory.Exists(dataAbstractionDirectory) Then
+		Trace.WriteLine("Creating DataAbstraction directory...")
+		Directory.CreateDirectory(dataAbstractionDirectory)
+	End If
+ 
+	If Not Directory.Exists(dataAbstractionDirectory) Then
+		Trace.WriteLine("Creating Generated directory...")
+		Directory.CreateDirectory(dataAbstractionDirectory)
+	End If
+
+	If IsValidTable(Me.SourceTable) Then 
+            If Me.TablePrefix Is Nothing Then
+                 Me.TablePrefix = ""
+            End If
+			Dim _BusinessInterfaces As New BusinessInterfaces()
+			Me.CopyPropertiesTo(_BusinessInterfaces)
+			_BusinessInterfaces.RenderToFile(String.Concat(dataAbstractionDirectory, "\",  Me.SourceTable.Name, Me.TablePrefix.ToString,".aspx"), True)
+ 
+            'Dim _BusinessInterfacesDesign As New BusinessInterfacesDesign()
+            'Me.CopyPropertiesTo(_BusinessInterfacesDesign)
+            '_BusinessInterfacesDesign.RenderToFile(String.Concat(dataAbstractionDirectory, "\", Me.SourceTable.Name,Me.TablePrefix.ToString,  ".aspx.designer.cs"), True)
+
+			 
+			Dim _BusinessInterfacesCodeBehind As New BusinessInterfacesCodeBehind()
+			Me.CopyPropertiesTo(_BusinessInterfacesCodeBehind)
+			_BusinessInterfacesCodeBehind.RenderToFile(String.Concat(dataAbstractionDirectory, "\",  Me.SourceTable.Name, Me.TablePrefix.ToString,".aspx.cs"), True)
+            
+            'edit =========
+            Dim _BusinessInterfacesEdit As New BusinessInterfacesEdit()
+			Me.CopyPropertiesTo(_BusinessInterfacesEdit)
+			_BusinessInterfacesEdit.RenderToFile(String.Concat(dataAbstractionDirectory, "\",  Me.SourceTable.Name, Me.TablePrefix.ToString,"Edit.aspx"), True)
+ 			 
+			Dim _BusinessInterfacesCodeBehindEdit As New BusinessInterfacesCodeBehindEdit()
+			Me.CopyPropertiesTo(_BusinessInterfacesCodeBehindEdit)
+			_BusinessInterfacesCodeBehindEdit.RenderToFile(String.Concat(dataAbstractionDirectory, "\",  Me.SourceTable.Name, Me.TablePrefix.ToString,"Edit.aspx.cs"), True)
+            '======================
+			 
+			Dim _BusinessObjectEnterprise As New BusinessObjectEnterprise()
+			Me.CopyPropertiesTo(_BusinessObjectEnterprise)
+			_BusinessObjectEnterprise.RenderToFile(String.Concat(dataAbstractionDirectory, "\", Me.SourceTable.Name, ".cs"), True)
+            
+            'Dim _StoredProceduresTrans As New StoredProceduresTrans()
+			'Me.CopyPropertiesTo(_StoredProceduresTrans)
+			'_StoredProceduresTrans.RenderToFile(String.Concat(dataAbstractionDirectory, "\", Me.SourceTable.Name, ".sql"), True)
+		End If
+End Sub 
+
+Private Function IsValidTable(ByVal table As TableSchema) As Boolean
+	Return (Me.SourceTable.HasPrimaryKey AndAlso Not table.Name.StartsWith("_") AndAlso table.Name <> "sysdiagrams" AndAlso Not table.ExtendedProperties.Contains("microsoft_database_tools_support"))
+End Function
+#End Region
+
+</script>
+

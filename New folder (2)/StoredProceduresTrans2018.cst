@@ -1,0 +1,1956 @@
+﻿<%------------------------------------------------------------------------------------------
+*  Developer:   huyht
+------------------------------------------------------------------------------------------%>
+<%@ CodeTemplate Debug="True" Language="C#" Encoding="UTF-8" Inherits="CodeSmith.BaseTemplates.SqlCodeTemplate" TargetLanguage="T-SQL" CompilerVersion="v3.5"
+	Description="Generates standard CRUD procedures based on a database table schema." %>
+<%-- Context --%>
+<%@ Property Name="SourceTable" Type="SchemaExplorer.TableSchema" Category="1. Context"
+	Description="Table that the stored procedures should be based on." %>
+<%-- Options --%>
+<%@ Property Name="IncludeDropStatements" Type="System.Boolean" Default="True" Category="2. Options"
+	Description="If true drop statements will be generated to drop existing stored procedures." %>
+<%@ Property Name="IsolationLevel" Type="TransactionIsolationLevelEnum" Default="ReadCommitted" Category="2. Options"
+	Description="Isolation level to use in the generated procedures." %>
+<%@ Property Name="ProcedurePrefix" Type="System.String" Optional="True" Default="" Category="2. Options"
+	Description="Prefix to use for all generated procedure names." %> 
+<%@ Property Name="AutoExecuteScript" Type="System.Boolean" Default="False" Category="2. Options"
+	Description="Whether or not to immediately execute the script on the target database." %>
+<%@ Property Name="OrderByExpression" Type="System.String" Default="" Optional="True" Category="2. Options"
+	Description="If supplied, this expression will be used to apply an order to the results on SELECT statements." %>
+<%@ Property Name="ExcludedColumns" Type="StringCollection" Default="" Optional="True" Category="2. Options"
+	Description="If supplied, any columns in this list will be excluded from all stored procedures unless the column is part of the primary key. (* is treated as a wildcard)" %>
+<%@ Property Name="ReadOnlyColumns" Type="StringCollection" Default="" Optional="True" Category="2. Options"
+	Description="If supplied, any columns in this list will be treated as read only. (* is treated as a wildcard)" %>
+<%-- Procedure Types --%>
+<%@ Property Name="IncludeInsertQuick" Type="System.Boolean" Default="True" Category="3. Procedure Types"
+	Description="If true an INSERT Quick procedure will be generated." %>
+<%@ Property Name="IncludeInsert" Type="System.Boolean" Default="True" Category="3. Procedure Types"
+	Description="If true an INSERT procedure will be generated." %>
+    <%@ Property Name="IncludeUpdateQuick" Type="System.Boolean" Default="True" Category="3. Procedure Types"
+	Description="If true an UPDATE Quick procedure will be generated." %>
+<%@ Property Name="IncludeUpdate" Type="System.Boolean" Default="True" Category="3. Procedure Types"
+	Description="If true an UPDATE procedure will be generated." %>
+<%@ Property Name="IncludeInsertUpdate" Type="System.Boolean" Default="True" Category="3. Procedure Types"
+	Description="If true an INSERT/UPDATE procedure will be generated." %>
+<%@ Property Name="IncludeDelete" Type="System.Boolean" Default="True" Category="3. Procedure Types"
+	Description="If true a DELETE procedure will be generated." %>
+<%@ Property Name="IncludeDeleteQuick" Type="System.Boolean" Default="True" Category="3. Procedure Types"
+	Description="If true a DELETE Quick procedure will be generated." %>
+<%@ Property Name="IncludeRecursionDelete" Type="System.Boolean" Default="False" Category="3. Procedure Types"
+	Description="If true a DELETE procedure will be generated." %>
+<%@ Property Name="IncludeSelect" Type="System.Boolean" Default="True" Category="3. Procedure Types"
+	Description="If true a SELECT procedure will be generated." %>
+<%@ Property Name="IncludeSelectAll" Type="System.Boolean" Default="True" Category="3. Procedure Types"
+	Description="If true a SELECT all procedure will be generated." %>
+<%@ Property Name="IncludeSelectPaged" Type="System.Boolean" Default="True" Category="3. Procedure Types"
+	Description="If true a SELECT procedure will be generated that allows for server side paging." %>
+<%@ Property Name="IncludeSelectByForeignKey" Type="System.Boolean" Default="True" Category="3. Procedure Types"
+	Description="If true a SELECT procedure will be generated for each foreign key." %>
+<%@ Property Name="IncludeSelectByIndex" Type="System.Boolean" Default="False" Category="3. Procedure Types"
+	Description="If true a SELECT procedure will be generated for each table index." %>
+<%@ Property Name="IncludeSelectDynamic" Type="System.Boolean" Default="False" Category="3. Procedure Types"
+	Description="If true a SELECT procedure will be generated that allows a dynamic WHERE condition to be used." %>
+<%@ Property Name="IncludeDeleteByForeignKey" Type="System.Boolean" Default="True" Category="3. Procedure Types"
+	Description="If true a DELETE procedure will be generated for each foreign key." %>
+<%@ Property Name="IncludeDeleteByIndex" Type="System.Boolean" Default="True" Category="3. Procedure Types"
+	Description="If true a DELETE procedure will be generated for each table index." %>
+<%@ Property Name="IncludeDeleteDynamic" Type="System.Boolean" Default="False" Category="3. Procedure Types"
+	Description="If true a DELETE procedure will be generated that allows a dynamic WHERE condition to be used." %>
+<%@ Property Name="IncludeSearch" Type="System.Boolean" Default="True" Category="3. Procedure Types"
+	Description="If true a SELECT procedure will be generated that allows for server side paging." %>
+<%-- Assembly References --%>
+<%@ Assembly Name="SchemaExplorer" %>
+<%@ Assembly Name="CodeSmith.BaseTemplates" %>
+<%@ Assembly Name="CodeSmith.CustomProperties" %>
+<%@ Assembly Name="System.Data" %>
+<%-- Namespace Imports --%>
+<%@ Import Namespace="SchemaExplorer" %>
+<%@ Import Namespace="CodeSmith.CustomProperties" %>
+<%@ Import Namespace="CodeSmith.BaseTemplates" %>
+<%@ Import Namespace="System.Data" %>
+<%@ Import Namespace="System.Text.RegularExpressions" %>
+<%@ Import Namespace="System.Collections.Generic" %>
+<%
+this.Progress.MaximumValue = 13;
+this.Progress.Step = 1;
+
+// this template requires a primary key on the source table
+if (!SourceTable.HasPrimaryKey) throw new ApplicationException("SourceTable does not contain a primary key.");
+
+// generate drop statements
+if (IncludeDropStatements)
+{
+	Response.WriteLine("--region Drop Existing Procedures");
+	Response.WriteLine("");
+
+
+    GenerateDropStatement(GetGetListProcedureName());
+	
+	if (IncludeInsert) GenerateDropStatement(GetInsertProcedureName());
+    if (IncludeInsertQuick) GenerateDropStatement(GetInsertQuickProcedureName());
+	if (IncludeUpdate) GenerateDropStatement(GetUpdateProcedureName());
+    if (IncludeUpdateQuick) GenerateDropStatement(GetUpdateQuickProcedureName());
+	if (IncludeInsertUpdate) GenerateDropStatement(GetInsertUpdateProcedureName());
+    if (IncludeDeleteQuick) GenerateDropStatement(GetDeleteQuickProcedureName());
+    if (IncludeDelete)
+	{
+		GenerateDropStatement(GetDeleteProcedureName());
+		// this is to keep a drop statement for a delete by procedure with only the primary key columns from being generated
+		_droppedProcedureNames.Add(GetDeleteByProcedureName(SourceTable.PrimaryKey.MemberColumns));
+	}
+	if (IncludeDeleteDynamic) GenerateDropStatement(GetDeleteDynamicProcedureName());
+    
+    if (IncludeRecursionDelete) GenerateDropStatement(GetRecursionDeleteProcedureName());
+    
+	if (IncludeSelect)
+	{
+		GenerateDropStatement(GetSelectProcedureName());
+		// this is to keep a drop statement for a select by procedure with only the primary key columns from being generated
+		_droppedProcedureNames.Add(GetSelectByProcedureName(SourceTable.PrimaryKey.MemberColumns));
+	}  
+ 
+    if (IncludeSelectPaged) GenerateDropStatement(GetSelectPagedProcedureName());
+	if (IncludeSelectDynamic) GenerateDropStatement(GetSelectDynamicProcedureName());
+	if (IncludeSelectAll) GenerateDropStatement(GetSelectAllProcedureName());
+	
+    if (IncludeSearch) GenerateDropStatement(GetSearchProcedureName()); 
+    
+	if (IncludeSelectByForeignKey)
+	{
+        foreach(TableKeySchema foreignKey in SourceTable.ForeignKeys)
+		{
+			GenerateDropStatement(GetSelectByProcedureName(foreignKey.ForeignKeyMemberColumns));
+		}
+	}
+	
+	if (IncludeSelectByIndex)
+	{
+		foreach(IndexSchema index in SourceTable.Indexes)
+		{
+			GenerateDropStatement(GetSelectByProcedureName(index.MemberColumns));
+		}
+	}
+	
+	if (IncludeDeleteByForeignKey)
+	{
+		foreach(TableKeySchema foreignKey in SourceTable.ForeignKeys)
+		{
+			GenerateDropStatement(GetDeleteByProcedureName(foreignKey.ForeignKeyMemberColumns));
+		}
+	}
+	
+	if (IncludeDeleteByIndex)
+	{
+		foreach(IndexSchema index in SourceTable.Indexes)
+		{
+			GenerateDropStatement(GetDeleteByProcedureName(index.MemberColumns));
+		}
+	}
+
+	
+	Response.WriteLine("--endregion");
+	Response.WriteLine("");
+	Response.WriteLine("GO");
+	Response.WriteLine("");
+	
+	this.Progress.PerformStep();
+}
+%>  
+
+<%------------------------------------------------------------------------------------------%>
+--Genarate system message
+EXEC [dbo].[SystemMessages_Insert_Quick] N'Inserting successful',N'Thêm mới dữ liệu thành công',1
+EXEC [dbo].[SystemMessages_Insert_Quick] N'Inserting failed',N'Thêm mới dữ liệu không thành công, Lỗi có thể do trùng lặp hoặc đầu vào không hợp lệ',2
+EXEC [dbo].[SystemMessages_Insert_Quick] N'Deleting successful',N'Xóa dữ liệu thành công',1
+EXEC [dbo].[SystemMessages_Insert_Quick] N'Deleting failed',N'Xóa dữ liệu không thành công, lỗi có thể do bạn chưa xóa hết dữ liệu phụ thuộc',2
+EXEC [dbo].[SystemMessages_Insert_Quick] N'Updating successful',N'Cập nhật dữ liệu thành công',1
+EXEC [dbo].[SystemMessages_Insert_Quick] N'Updating failed',N'Cập nhật dữ liệu không thành công, lỗi có thể do đầu vào không hợp lệ',2
+EXEC [dbo].[SystemMessages_Insert_Quick] N'Updating already existed',N'Tên dữ liệu đã tồn tại. Vui lòng nhập tên dữ liệu khác.',2
+
+GO
+
+<%------------------------------------------------------------------------------------------%>
+
+
+<%------------------------------------------------------------------------------------------
+*
+* Insert Quick Procedure
+*
+------------------------------------------------------------------------------------------%>
+
+<%
+if (IncludeInsertQuick)
+{
+	GenerateProcedureHeader(GetInsertQuickProcedureName());
+	
+	/*
+	 * Check to see if the primary key is a single column primary key and also if it's either an
+	 * identity column or a GUID.  If so, we will not include the primary key column in the
+	 * list of input parameters.
+	 */
+	
+	if (SourceTable.PrimaryKey.MemberColumns.Count == 1
+		&& (SourceTable.PrimaryKey.MemberColumns[0].DataType == DbType.Guid
+		|| ((SourceTable.PrimaryKey.MemberColumns[0].DataType == DbType.Int16
+		|| SourceTable.PrimaryKey.MemberColumns[0].DataType == DbType.Int32
+        || SourceTable.PrimaryKey.MemberColumns[0].DataType == DbType.Decimal
+        || SourceTable.PrimaryKey.MemberColumns[0].DataType == DbType.Double
+        || SourceTable.PrimaryKey.MemberColumns[0].DataType == DbType.Byte
+		|| SourceTable.PrimaryKey.MemberColumns[0].DataType == DbType.Int64)
+		&& (bool)SourceTable.PrimaryKey.MemberColumns[0].ExtendedProperties["CS_IsIdentity"].Value == true)))
+	{
+		ColumnSchema primaryKeyColumn = SourceTable.PrimaryKey.MemberColumns[0];
+%>
+
+CREATE PROCEDURE <%= GetInsertQuickProcedureName() %>
+    <%GenerateParameters(FilterReadOnlyAndExcludedColumnsInsert(SourceTable.NonPrimaryKeyColumns), 1, true); %>
+    <%GenerateParameter(primaryKeyColumn, 1, false, true, true); %>
+
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET @<%= primaryKeyColumn.Name %>=0;
+    BEGIN TRY
+        BEGIN TRANSACTION
+                <%-- If the primary key is a GUID, then assign a new GUID using NEWID(). --%>
+    <% if (primaryKeyColumn.DataType == DbType.Guid) { %>
+        SET @<%= primaryKeyColumn.Name %> = NEWID();
+    <% } %>
+    <% if (primaryKeyColumn.DataType == DbType.Guid) { %>
+        INSERT INTO [<%= SourceTable.Name %>] ([<%= primaryKeyColumn.Name %>],<% GenerateColumns(FilterReadOnlyAndExcludedColumnsInsert(SourceTable.NonPrimaryKeyColumns), 0); %>)
+    <% } %>
+    <% else { %>
+        INSERT INTO [<%= SourceTable.Name %>] (<% GenerateColumns(FilterReadOnlyAndExcludedColumnsInsert(SourceTable.NonPrimaryKeyColumns), 0); %>)
+    <% } %>
+    <% if (primaryKeyColumn.DataType == DbType.Guid) { %>
+        VALUES (<% GenerateVariables(FilterReadOnlyAndExcludedColumnsInsert(SourceTable.NonPrimaryKeyColumns), 0); %>,@<%= primaryKeyColumn.Name %>);
+    <% } %>
+    <% else { %>
+        VALUES (<% GenerateVariables(FilterReadOnlyAndExcludedColumnsInsert(SourceTable.NonPrimaryKeyColumns), 0); %>);
+    <% } %>
+                <%-- If the primary key is an identity column, then capture the newly assigned identity using SCOPE_IDENTITY(). --%>
+                <% if (primaryKeyColumn.DataType == DbType.Int16 
+                            || primaryKeyColumn.DataType == DbType.Int32
+                            || primaryKeyColumn.DataType == DbType.Int64
+                            || primaryKeyColumn.DataType == DbType.Decimal
+                            || SourceTable.PrimaryKey.MemberColumns[0].DataType == DbType.Byte
+                            || primaryKeyColumn.DataType == DbType.Double  
+                            ) { %>
+        IF (@@ERROR=0) BEGIN
+            COMMIT TRANSACTION;
+            SET @<%= primaryKeyColumn.Name %>=@@IDENTITY;
+        END
+        ELSE BEGIN
+            ROLLBACK TRANSACTION;
+        END
+    END TRY
+    BEGIN CATCH
+      ROLLBACK TRANSACTION;        
+      DECLARE @ErrorNumber INT,
+		@ErrorSeverity INT,
+        @ErrorState INT,
+        @ErrorLine INT,
+		@ErrorProcedure NVARCHAR(128),
+		@ErrorMessage NVARCHAR(4000);
+        SET @ErrorNumber = ERROR_NUMBER();  
+        SET @ErrorSeverity = ERROR_SEVERITY();
+        SET @ErrorState = ERROR_STATE();
+        SET @ErrorLine = ERROR_LINE ();  
+		SET @ErrorProcedure = ERROR_PROCEDURE();  
+		SET @ErrorMessage = ERROR_MESSAGE();  
+        EXEC <%= GetSystemErrorsProcedureName()%> @ErrorNumber,@ErrorSeverity,@ErrorState,@ErrorLine,@ErrorProcedure,@ErrorMessage;   
+    END CATCH
+END 
+
+<% } %>
+
+<%-- Primary key is not a identity column or a GUID, so include all columns as input parameters. --%>
+<% } else { %>
+
+CREATE PROCEDURE <%= GetInsertQuickProcedureName() %>
+    <%GenerateParameters(FilterReadOnlyAndExcludedColumnsInsert(SourceTable.Columns), 1); %> 
+
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        BEGIN TRANSACTION
+            INSERT INTO <%= GetTableOwner() %>[<%= SourceTable.Name %>]( 
+                <% GenerateColumns(SourceTable.Columns, 4); %>)
+            VALUES(
+                <% GenerateVariables(SourceTable.Columns, 4); %>);
+                    
+        IF (@@ERROR=0) BEGIN  
+            COMMIT TRANSACTION;
+        END
+        ELSE BEGIN
+            ROLLBACK TRANSACTION;
+        END
+    END TRY
+    
+    BEGIN CATCH
+        ROLLBACK TRANSACTION;
+        DECLARE @ErrorNumber INT,
+		@ErrorSeverity INT,
+        @ErrorState INT,
+        @ErrorLine INT,
+		@ErrorProcedure NVARCHAR(128),
+		@ErrorMessage NVARCHAR(4000);
+        SET @ErrorNumber = ERROR_NUMBER();  
+        SET @ErrorSeverity = ERROR_SEVERITY();
+        SET @ErrorState = ERROR_STATE();
+        SET @ErrorLine = ERROR_LINE ();  
+		SET @ErrorProcedure = ERROR_PROCEDURE();  
+		SET @ErrorMessage = ERROR_MESSAGE();  
+        EXEC <%= GetSystemErrorsProcedureName()%> @ErrorNumber,@ErrorSeverity,@ErrorState,@ErrorLine,@ErrorProcedure,@ErrorMessage;   
+    END CATCH
+END
+
+
+<%
+	}
+	GenerateProcedureFooter(GetInsertQuickProcedureName());
+	this.Progress.PerformStep();
+}
+%>
+
+<%------------------------------------------------------------------------------------------
+*
+* Insert Procedure
+*
+------------------------------------------------------------------------------------------%>
+
+<%
+if (IncludeInsert)
+{
+	GenerateProcedureHeader(GetInsertProcedureName());
+	
+	/*
+	 * Check to see if the primary key is a single column primary key and also if it's either an
+	 * identity column or a GUID.  If so, we will not include the primary key column in the
+	 * list of input parameters.
+	 */
+	
+	if (SourceTable.PrimaryKey.MemberColumns.Count == 1
+		&& (SourceTable.PrimaryKey.MemberColumns[0].DataType == DbType.Guid
+		|| ((SourceTable.PrimaryKey.MemberColumns[0].DataType == DbType.Int16
+		|| SourceTable.PrimaryKey.MemberColumns[0].DataType == DbType.Int32
+        || SourceTable.PrimaryKey.MemberColumns[0].DataType == DbType.Decimal
+        || SourceTable.PrimaryKey.MemberColumns[0].DataType == DbType.Byte
+        || SourceTable.PrimaryKey.MemberColumns[0].DataType == DbType.Double
+		|| SourceTable.PrimaryKey.MemberColumns[0].DataType == DbType.Int64)
+		&& (bool)SourceTable.PrimaryKey.MemberColumns[0].ExtendedProperties["CS_IsIdentity"].Value == true)))
+	{
+		ColumnSchema primaryKeyColumn = SourceTable.PrimaryKey.MemberColumns[0];
+%>
+
+CREATE PROCEDURE <%= GetInsertProcedureName() %>
+    <%GenerateParameters(FilterReadOnlyAndExcludedColumnsInsert(SourceTable.NonPrimaryKeyColumns), 1, true); %>
+    <%GenerateParameter(primaryKeyColumn, 1, false, false, true); %>
+    
+    @SysMessageId INT OUTPUT,  
+    @SysMessageTypeId TINYINT OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+         <%-- If the primary key is an identity column, then capture the newly assigned identity using SCOPE_IDENTITY(). --%>
+                <% if (primaryKeyColumn.DataType == DbType.Int16 
+                        || primaryKeyColumn.DataType == DbType.Int32
+                        || primaryKeyColumn.DataType == DbType.Int64
+                        || primaryKeyColumn.DataType == DbType.Decimal
+                        || SourceTable.PrimaryKey.MemberColumns[0].DataType == DbType.Byte
+                        || primaryKeyColumn.DataType == DbType.Double  
+                        ) { %> 
+        EXEC <%= GetInsertQuickProcedureName() %> <% GenerateVariables(FilterReadOnlyAndExcludedColumnsInsert(SourceTable.NonPrimaryKeyColumns), 0); %>,@<%= primaryKeyColumn.Name %> OUTPUT;       
+        IF (@<%= primaryKeyColumn.Name %>>0) BEGIN
+            EXEC dbo.SysMessages_GetSysMessageId N'Inserting successful',@SysMessageId OUTPUT,@SysMessageTypeId OUTPUT;
+        END
+        ELSE BEGIN
+            EXEC dbo.SysMessages_GetSysMessageId N'Inserting failed',@SysMessageId OUTPUT,@SysMessageTypeId OUTPUT;
+        END
+    END TRY
+    BEGIN CATCH
+        DECLARE @ErrorNumber INT,
+		@ErrorSeverity INT,
+        @ErrorState INT,
+        @ErrorLine INT,
+		@ErrorProcedure NVARCHAR(128),
+		@ErrorMessage NVARCHAR(4000);
+        SET @ErrorNumber = ERROR_NUMBER();  
+        SET @ErrorSeverity = ERROR_SEVERITY();
+        SET @ErrorState = ERROR_STATE();
+        SET @ErrorLine = ERROR_LINE ();  
+		SET @ErrorProcedure = ERROR_PROCEDURE();  
+		SET @ErrorMessage = ERROR_MESSAGE();  
+        EXEC <%= GetSystemErrorsProcedureName()%> @ErrorNumber,@ErrorSeverity,@ErrorState,@ErrorLine,@ErrorProcedure,@ErrorMessage;   
+        EXEC dbo.SysMessages_GetSysMessageId N'Inserting failed',@SysMessageId OUTPUT,@SysMessageTypeId OUTPUT; 
+    END CATCH
+END 
+
+<% } %>
+
+<%-- Primary key is not a identity column or a GUID, so include all columns as input parameters. --%>
+<% } else { %>
+
+CREATE PROCEDURE <%= GetInsertProcedureName() %>    
+    <% GenerateParameters(FilterReadOnlyAndExcludedColumnsInsert(SourceTable.Columns), 1); %>
+    
+    @SysMessageId INT OUTPUT,
+    @SysMessageTypeId TINYINT OUTPUT                    
+AS
+                
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        EXEC    <%= GetInsertQuickProcedureName() %>
+            <%GenerateVariables(SourceTable.Columns, 3); %>;
+        
+        EXEC dbo.SysMessages_GetSysMessageId N'Inserting successful',@SysMessageId OUTPUT,@SysMessageTypeId OUTPUT;            
+    END TRY
+    
+    BEGIN CATCH
+        DECLARE @ErrorNumber INT,
+		@ErrorSeverity INT,
+        @ErrorState INT,
+        @ErrorLine INT,
+		@ErrorProcedure NVARCHAR(128),
+		@ErrorMessage NVARCHAR(4000);
+        SET @ErrorNumber = ERROR_NUMBER();  
+        SET @ErrorSeverity = ERROR_SEVERITY();
+        SET @ErrorState = ERROR_STATE();
+        SET @ErrorLine = ERROR_LINE ();  
+		SET @ErrorProcedure = ERROR_PROCEDURE();  
+		SET @ErrorMessage = ERROR_MESSAGE();  
+        EXEC <%= GetSystemErrorsProcedureName()%> @ErrorNumber,@ErrorSeverity,@ErrorState,@ErrorLine,@ErrorProcedure,@ErrorMessage;   
+        EXEC dbo.SysMessages_GetSysMessageId N'Inserting failed',@SysMessageId OUTPUT,@SysMessageTypeId OUTPUT; 
+    END CATCH
+END
+
+
+<%
+	}
+	GenerateProcedureFooter(GetInsertProcedureName());
+	this.Progress.PerformStep();
+}
+%>
+
+
+<%------------------------------------------------------------------------------------------
+*
+* Update Quick Procedure
+*
+------------------------------------------------------------------------------------------%>
+<%
+if (IncludeUpdateQuick)
+{
+	GenerateProcedureHeader(GetUpdateQuickProcedureName());
+%>
+
+CREATE PROCEDURE <%= GetUpdateQuickProcedureName() %>
+    <%GenerateParameters(FilterReadOnlyAndExcludedColumnsUpdate(SourceTable.NonPrimaryKeyColumns), 1, true); %>
+    <% 
+    ColumnSchema primaryKeyColumn = SourceTable.PrimaryKey.MemberColumns[0];
+    GenerateParameter(primaryKeyColumn, 1, false, true,  false); %> 
+
+AS 
+BEGIN
+    SET NOCOUNT ON; 
+    BEGIN TRY
+    BEGIN TRANSACTION 
+        UPDATE [<%= SourceTable.Name %>] SET
+            <%GenerateUpdates(SourceTable.NonPrimaryKeyColumns, 3); %>
+        WHERE <% GenerateConditions(SourceTable.PrimaryKey.MemberColumns, 0); %>;
+                            
+        IF (@@ERROR=0) BEGIN
+            COMMIT TRANSACTION;
+        END
+        ELSE BEGIN
+            ROLLBACK TRANSACTION;
+        END
+    END TRY
+    BEGIN CATCH
+        ROLLBACK TRANSACTION;
+        DECLARE @ErrorNumber INT,
+		@ErrorSeverity INT,
+        @ErrorState INT,
+        @ErrorLine INT,
+		@ErrorProcedure NVARCHAR(128),
+		@ErrorMessage NVARCHAR(4000);
+        SET @ErrorNumber = ERROR_NUMBER();  
+        SET @ErrorSeverity = ERROR_SEVERITY();
+        SET @ErrorState = ERROR_STATE();
+        SET @ErrorLine = ERROR_LINE ();  
+		SET @ErrorProcedure = ERROR_PROCEDURE();  
+		SET @ErrorMessage = ERROR_MESSAGE();  
+        EXEC <%= GetSystemErrorsProcedureName()%> @ErrorNumber,@ErrorSeverity,@ErrorState,@ErrorLine,@ErrorProcedure,@ErrorMessage;   
+    END CATCH
+END
+
+
+<%
+	GenerateProcedureFooter(GetUpdateQuickProcedureName());
+	this.Progress.PerformStep();
+}
+%>
+
+
+<%------------------------------------------------------------------------------------------
+*
+* Update Procedure
+*
+------------------------------------------------------------------------------------------%>
+<%
+if (IncludeUpdate)
+{
+	GenerateProcedureHeader(GetUpdateProcedureName());
+%>
+
+CREATE PROCEDURE <%= GetUpdateProcedureName() %>
+<% GenerateParameters(FilterReadOnlyAndExcludedColumnsUpdate(SourceTable.NonPrimaryKeyColumns), 1, true); %>
+<% ColumnSchema primaryKeyColumn = SourceTable.PrimaryKey.MemberColumns[0]; GenerateParameter(primaryKeyColumn, 1, false, false,  false); %>
+
+    @SysMessageId INT OUTPUT,
+    @SysMessageTypeId TINYINT OUTPUT
+AS 
+
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY  
+        EXEC <%= GetUpdateQuickProcedureName() %> <% GenerateVariables(FilterReadOnlyAndExcludedColumnsUpdate(SourceTable.NonPrimaryKeyColumns), 0); %>,@<%= primaryKeyColumn.Name %>;
+        EXEC dbo.SysMessages_GetSysMessageId N'Updating successful',@SysMessageId OUTPUT,@SysMessageTypeId OUTPUT;
+    END TRY
+    BEGIN CATCH
+        DECLARE @ErrorNumber INT,
+		@ErrorSeverity INT,
+        @ErrorState INT,
+        @ErrorLine INT,
+		@ErrorProcedure NVARCHAR(128),
+		@ErrorMessage NVARCHAR(4000);
+        SET @ErrorNumber = ERROR_NUMBER();  
+        SET @ErrorSeverity = ERROR_SEVERITY();
+        SET @ErrorState = ERROR_STATE();
+        SET @ErrorLine = ERROR_LINE ();  
+		SET @ErrorProcedure = ERROR_PROCEDURE();  
+		SET @ErrorMessage = ERROR_MESSAGE();  
+        EXEC <%= GetSystemErrorsProcedureName()%> @ErrorNumber,@ErrorSeverity,@ErrorState,@ErrorLine,@ErrorProcedure,@ErrorMessage;   
+        EXEC dbo.SysMessages_GetSysMessageId N'Updating failed',@SysMessageId OUTPUT,@SysMessageTypeId OUTPUT;
+    END CATCH
+END
+
+
+<%
+	GenerateProcedureFooter(GetUpdateProcedureName());
+	this.Progress.PerformStep();
+}
+%>
+
+<%------------------------------------------------------------------------------------------
+*
+* Exists Funtion
+*
+------------------------------------------------------------------------------------------%>
+<%
+if (IncludeUpdate)
+{
+	GenerateProcedureHeader(GetExistFuntionName());
+%>
+
+CREATE FUNCTION <%= GetExistFuntionName() %>
+    (@<%= SourceTable.PrimaryKey.MemberColumns[0].Name %> <%= SourceTable.PrimaryKey.MemberColumns[0].NativeType.ToString().ToUpper() %>  )
+RETURNS <%= SourceTable.PrimaryKey.MemberColumns[0].NativeType.ToString().ToUpper() %>  
+AS
+BEGIN
+  DECLARE @RetVal <%= SourceTable.PrimaryKey.MemberColumns[0].NativeType.ToString().ToUpper() %>  ;
+  IF (EXISTS(SELECT 1 FROM [<%= SourceTable.Name %>] WHERE (<%= SourceTable.PrimaryKey.MemberColumns[0].Name %>=@<%= SourceTable.PrimaryKey.MemberColumns[0].Name %>))) BEGIN
+    SET @RetVal=1;
+  END
+  ELSE BEGIN
+    SET @RetVal=0;
+  END
+  RETURN @RetVal;
+END
+
+<%
+	GenerateProcedureFooter(GetExistFuntionName());
+	this.Progress.PerformStep();
+}
+%>
+
+
+
+<%------------------------------------------------------------------------------------------
+*
+* InsertOrUpdate Procedure
+*
+------------------------------------------------------------------------------------------%>
+<%
+if (IncludeUpdate)
+{
+	GenerateProcedureHeader(GetInsertOrUpdateProcedureName());
+%>
+
+CREATE PROCEDURE <%= GetInsertOrUpdateProcedureName() %>
+<% GenerateParameters(FilterReadOnlyAndExcludedColumnsInsert(SourceTable.NonPrimaryKeyColumns), 1, true); %>
+<% ColumnSchema primaryKeyColumn = SourceTable.PrimaryKey.MemberColumns[0]; GenerateParameter(primaryKeyColumn, 1, false, false,  true); %>    
+
+    @SysMessageId INT OUTPUT,
+    @SysMessageTypeId TINYINT OUTPUT
+AS 
+
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY  
+        IF (<%= GetExistFuntionName() %>(@<%= primaryKeyColumn.Name %>)>0) BEGIN    
+            EXEC <%= GetUpdateProcedureName() %> <% GenerateVariables(FilterReadOnlyAndExcludedColumnsUpdate(SourceTable.NonPrimaryKeyColumns), 0); %>,@<%= primaryKeyColumn.Name %>,@SysMessageId OUTPUT,@SysMessageTypeId OUTPUT;  
+        END
+        ELSE BEGIN      
+            EXEC <%= GetInsertProcedureName() %> <% GenerateVariables(FilterReadOnlyAndExcludedColumnsInsert(SourceTable.NonPrimaryKeyColumns), 0); %>,@<%= primaryKeyColumn.Name %> OUTPUT,@SysMessageId OUTPUT,@SysMessageTypeId OUTPUT;     
+        END
+    END TRY
+    BEGIN CATCH
+        DECLARE @ErrorNumber INT,
+		@ErrorSeverity INT,
+        @ErrorState INT,
+        @ErrorLine INT,
+		@ErrorProcedure NVARCHAR(128),
+		@ErrorMessage NVARCHAR(4000);
+        SET @ErrorNumber = ERROR_NUMBER();  
+        SET @ErrorSeverity = ERROR_SEVERITY();
+        SET @ErrorState = ERROR_STATE();
+        SET @ErrorLine = ERROR_LINE ();  
+		SET @ErrorProcedure = ERROR_PROCEDURE();  
+		SET @ErrorMessage = ERROR_MESSAGE();  
+        EXEC <%= GetSystemErrorsProcedureName()%> @ErrorNumber,@ErrorSeverity,@ErrorState,@ErrorLine,@ErrorProcedure,@ErrorMessage;    
+        EXEC dbo.SysMessages_GetSysMessageId N'Updating failed',@SysMessageId OUTPUT,@SysMessageTypeId OUTPUT;
+    END CATCH
+END
+
+
+<%
+	GenerateProcedureFooter(GetInsertOrUpdateProcedureName());
+	this.Progress.PerformStep();
+}
+%>
+
+
+
+<%------------------------------------------------------------------------------------------
+*
+* Delete Quick Procedure
+*
+------------------------------------------------------------------------------------------%>
+<%
+if (IncludeDeleteQuick)
+{
+	// this is to keep a delete by procedure with only the primary key columns from being generated
+	_generatedProcedureNames.Add(GetDeleteByProcedureName(SourceTable.PrimaryKey.MemberColumns));
+	
+	GenerateProcedureHeader(GetDeleteQuickProcedureName());
+%>
+
+CREATE PROCEDURE <%= GetDeleteQuickProcedureName() %>
+    <%GenerateParameters(SourceTable.PrimaryKey.MemberColumns, 1); %>
+
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        BEGIN TRANSACTION
+        DELETE FROM [<%= SourceTable.Name %>]
+        WHERE <% GenerateConditions(SourceTable.PrimaryKey.MemberColumns, 0); %>;
+        IF (@@ERROR=0) BEGIN
+            COMMIT TRANSACTION;
+        END
+        ELSE BEGIN
+            ROLLBACK TRANSACTION;
+        END
+    END TRY
+    BEGIN CATCH
+        ROLLBACK TRANSACTION;
+        DECLARE @ErrorNumber INT,
+		@ErrorSeverity INT,
+        @ErrorState INT,
+        @ErrorLine INT,
+		@ErrorProcedure NVARCHAR(128),
+		@ErrorMessage NVARCHAR(4000);
+        SET @ErrorNumber = ERROR_NUMBER();  
+        SET @ErrorSeverity = ERROR_SEVERITY();
+        SET @ErrorState = ERROR_STATE();
+        SET @ErrorLine = ERROR_LINE ();  
+		SET @ErrorProcedure = ERROR_PROCEDURE();  
+		SET @ErrorMessage = ERROR_MESSAGE();  
+        EXEC <%= GetSystemErrorsProcedureName()%> @ErrorNumber,@ErrorSeverity,@ErrorState,@ErrorLine,@ErrorProcedure,@ErrorMessage;    
+    END CATCH
+END
+
+
+<%
+	GenerateProcedureFooter(GetDeleteQuickProcedureName());
+	this.Progress.PerformStep();
+}
+%> 
+
+<%------------------------------------------------------------------------------------------
+*
+* Delete Procedure
+*
+------------------------------------------------------------------------------------------%>
+<%
+if (IncludeDelete)
+{
+	// this is to keep a delete by procedure with only the primary key columns from being generated
+	_generatedProcedureNames.Add(GetDeleteByProcedureName(SourceTable.PrimaryKey.MemberColumns));
+	
+	GenerateProcedureHeader(GetDeleteProcedureName());
+    ColumnSchema primaryKeyColumn = SourceTable.PrimaryKey.MemberColumns[0];
+%>
+
+CREATE PROCEDURE <%= GetDeleteProcedureName() %>
+    <%GenerateParameters(SourceTable.PrimaryKey.MemberColumns, 0); %>, 
+    @SysMessageId INT OUTPUT,
+    @SysMessageTypeId TINYINT OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY 
+        EXEC <%= GetDeleteQuickProcedureName() %> @<%= primaryKeyColumn.Name %>;
+        IF (EXISTS(SELECT 1 FROM <%= SourceTable.Name %> WHERE (<%= primaryKeyColumn.Name %>=@<%= primaryKeyColumn.Name %>))) BEGIN
+            EXEC dbo.SysMessages_GetSysMessageId N'Deleting failed',@SysMessageId OUTPUT,@SysMessageTypeId OUTPUT;
+        END
+        ELSE BEGIN
+            EXEC dbo.SysMessages_GetSysMessageId N'Deleting successful',@SysMessageId OUTPUT,@SysMessageTypeId OUTPUT;
+        END
+    END TRY 
+    BEGIN CATCH
+        DECLARE @ErrorNumber INT,
+		@ErrorSeverity INT,
+        @ErrorState INT,
+        @ErrorLine INT,
+		@ErrorProcedure NVARCHAR(128),
+		@ErrorMessage NVARCHAR(4000);
+        SET @ErrorNumber = ERROR_NUMBER();  
+        SET @ErrorSeverity = ERROR_SEVERITY();
+        SET @ErrorState = ERROR_STATE();
+        SET @ErrorLine = ERROR_LINE ();  
+		SET @ErrorProcedure = ERROR_PROCEDURE();  
+		SET @ErrorMessage = ERROR_MESSAGE();  
+        EXEC <%= GetSystemErrorsProcedureName()%> @ErrorNumber,@ErrorSeverity,@ErrorState,@ErrorLine,@ErrorProcedure,@ErrorMessage;    
+        EXEC dbo.SysMessages_GetSysMessageId N'Deleting failed',@SysMessageId OUTPUT,@SysMessageTypeId OUTPUT;
+    END CATCH
+END
+
+
+<%
+	GenerateProcedureFooter(GetDeleteProcedureName());
+	this.Progress.PerformStep();
+}
+%> 
+
+<%------------------------------------------------------------------------------------------
+*
+* Delete By Foreign Key Procedures
+*
+------------------------------------------------------------------------------------------%>
+<%
+if (IncludeDeleteByForeignKey)
+{
+    foreach(TableKeySchema foreignKey in SourceTable.ForeignKeys)
+	{
+		string procedureName = GetDeleteByProcedureName(foreignKey.ForeignKeyMemberColumns);
+		if (!_generatedProcedureNames.Contains(procedureName))
+		{
+			_generatedProcedureNames.Add(procedureName);
+			GenerateProcedureHeader(procedureName);
+%>
+
+CREATE PROCEDURE <%= procedureName %>
+    <%GenerateParameters(foreignKey.ForeignKeyMemberColumns, 1); %>,
+    
+    @SysMessageId INT OUTPUT,
+    @SysMessageTypeId TINYINT OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @<%= SourceTable.PrimaryKey.MemberColumns[0].Name %> <%= SourceTable.PrimaryKey.MemberColumns[0].Column.NativeType %>;
+    BEGIN TRY
+        DECLARE curDataNeedDel CURSOR FOR SELECT <%= SourceTable.PrimaryKey.MemberColumns[0].Name %>
+            FROM [<%= SourceTable.Name %>]
+            WHERE <% GenerateConditions(foreignKey.ForeignKeyMemberColumns, 0); %>;
+        OPEN curDataNeedDel;
+        FETCH curDataNeedDel INTO @<%= SourceTable.PrimaryKey.MemberColumns[0].Name %>;
+        WHILE (@@FETCH_STATUS=0) BEGIN
+            EXEC [dbo].[<%=SourceTable.Name%>_Delete_Quick] @<%= SourceTable.PrimaryKey.MemberColumns[0].Name %>; 
+		    FETCH curDataNeedDel INTO @<%= SourceTable.PrimaryKey.MemberColumns[0].Name %>;
+		    CONTINUE;
+	    END
+	    CLOSE curDataNeedDel;
+	    DEALLOCATE curDataNeedDel;
+    END TRY
+    
+    BEGIN CATCH
+        DECLARE @ErrorNumber INT,
+		@ErrorSeverity INT,
+        @ErrorState INT,
+        @ErrorLine INT,
+		@ErrorProcedure NVARCHAR(128),
+		@ErrorMessage NVARCHAR(4000);
+        SET @ErrorNumber = ERROR_NUMBER();  
+        SET @ErrorSeverity = ERROR_SEVERITY();
+        SET @ErrorState = ERROR_STATE();
+        SET @ErrorLine = ERROR_LINE ();  
+		SET @ErrorProcedure = ERROR_PROCEDURE();  
+		SET @ErrorMessage = ERROR_MESSAGE();  
+        EXEC <%= GetSystemErrorsProcedureName()%> @ErrorNumber,@ErrorSeverity,@ErrorState,@ErrorLine,@ErrorProcedure,@ErrorMessage;     
+        EXEC dbo.SysMessages_GetSysMessageId N'Deleting failed', @SysMessageId OUTPUT, @SysMessageTypeId OUTPUT;
+    END CATCH
+END
+
+
+
+GO
+
+<%
+			GenerateProcedureFooter(procedureName);
+		}
+	}
+	this.Progress.PerformStep();
+}
+%>
+
+<%------------------------------------------------------------------------------------------
+*
+* Search Procedures
+*
+------------------------------------------------------------------------------------------%>
+<%
+if (IncludeSearch)
+{
+
+	GenerateProcedureHeader(GetSearchProcedureName());
+	
+%>
+
+CREATE PROCEDURE  <%= GetSearchProcedureName() %> 
+    <%GenerateSearchParameters( FilterReadOnlyAndExcludedColumnsSearch(SourceTable.Columns), 1 ); %>     
+    ,@DateFrom DATETIME=NULL
+    ,@DateTo DATETIME=NULL
+    ,@OrderBy NVARCHAR(255)=''
+    ,@PageSize INT=20
+    ,@PageNumber INT=0
+    ,@RowCount INT OUTPUT    
+AS  
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @DbName NVARCHAR(255);
+    DECLARE @FieldName NVARCHAR(255);
+    DECLARE @WhereClause NVARCHAR(4000);
+    DECLARE @fieldSelect NVARCHAR(4000);
+    DECLARE @FieldListOrder NVARCHAR(4000);
+    DECLARE @Query NVARCHAR(4000);
+    BEGIN TRY  
+        SET @DbName='';
+        SET @FieldName='<%=SourceTable.PrimaryKey.MemberColumns[0].Column.Name%>'; 
+        IF (@OrderBy='' OR @OrderBy IS NULL) SET @OrderBy = '<%=SourceTable.PrimaryKey.MemberColumns[0].Column.Name%> DESC';
+        SET @WhereClause = '';              
+        <%  GenerateSearchWhereClauses(FilterReadOnlyAndExcludedColumnsSearch(SourceTable.Columns),2); %>
+        -------------------------------------------
+        IF (@DateFrom IS NOT NULL) BEGIN
+        IF (LEN(@WhereClause)>0) SET @WhereClause=@WhereClause + ' AND ';
+        SET @WhereClause=@WhereClause + '(CrDateTime>=''' + CONVERT(NVARCHAR, @DateFrom) + ''')';
+        END
+        -------------------------------------------
+        IF (@DateTo IS NOT NULL) BEGIN
+        IF (LEN(@WhereClause)>0) SET @WhereClause=@WhereClause + ' AND ';
+        SET @WhereClause=@WhereClause + '(CrDateTime<''' + CONVERT(NVARCHAR, @DateTo+1) + ''')';
+        END
+        -------------------------------------------
+        SET @Query = '<%=SourceTable.Name%>';   
+        EXEC [dbo].[CountObject]  @DbName,@Query,@FieldName, @WhereClause,@RowCount OUTPUT;
+        EXEC [dbo].[GetPage_Objects] @DbName,@Query,@WhereClause,@OrderBy,@PageSize,@PageNumber,@RowCount,@fieldSelect,@FieldListOrder;
+        
+    END TRY
+    BEGIN CATCH
+		DECLARE @ErrorNumber INT,
+		@ErrorSeverity INT,
+        @ErrorState INT,
+        @ErrorLine INT,
+		@ErrorProcedure NVARCHAR(128),
+		@ErrorMessage NVARCHAR(4000);
+        SET @ErrorNumber = ERROR_NUMBER();  
+        SET @ErrorSeverity = ERROR_SEVERITY();
+        SET @ErrorState = ERROR_STATE();
+        SET @ErrorLine = ERROR_LINE ();  
+		SET @ErrorProcedure = ERROR_PROCEDURE();  
+		SET @ErrorMessage = ERROR_MESSAGE() + '- Query: ' + @WhereClause;  
+        EXEC <%= GetSystemErrorsProcedureName()%> @ErrorNumber,@ErrorSeverity,@ErrorState,@ErrorLine,@ErrorProcedure,@ErrorMessage;   
+    END CATCH
+END
+
+<%
+	GenerateProcedureFooter(GetSearchProcedureName());	
+	this.Progress.PerformStep();
+}
+%>
+<%------------------------- End Created Proceduce--------------------------------------%>
+<script runat="template">
+#region Member Variables
+private StringCollection _droppedProcedureNames = new StringCollection();
+private StringCollection _generatedProcedureNames = new StringCollection();
+#endregion
+
+#region Isolation Level
+public enum TransactionIsolationLevelEnum
+{
+	ReadCommitted,
+	ReadUncommitted,
+	RepeatableRead,
+	Serializable
+}
+
+public void GenerateSetTransactionIsolationLevelStatement(TransactionIsolationLevelEnum isolationLevel)
+{
+	Response.Write("SET TRANSACTION ISOLATION LEVEL ");
+	
+	switch (isolationLevel)
+	{
+		case TransactionIsolationLevelEnum.ReadUncommitted:
+		{
+			Response.WriteLine("READ UNCOMMITTED");
+			break;
+		}
+		case TransactionIsolationLevelEnum.RepeatableRead:
+		{
+			Response.WriteLine("REPEATABLE READ");
+			break;
+		}
+		case TransactionIsolationLevelEnum.Serializable:
+		{
+			Response.WriteLine("SERIALIZABLE");
+			break;
+		}
+		default:
+		{
+			Response.WriteLine("READ COMMITTED");
+			break;
+		}
+	}
+}
+#endregion
+
+#region Code Generation Helpers
+public string GetTableOwner()
+{
+	return GetTableOwner(true);
+}
+
+public string GetTableOwner(bool includeDot)
+{
+	if (SourceTable.Owner.Length > 0)
+	{
+		if (includeDot)
+		{
+			return "[" + SourceTable.Owner + "].";
+		}
+		else
+		{
+			return "[" + SourceTable.Owner + "]";
+		}
+	}
+	else
+	{
+		return "";
+	}
+}
+
+public void GenerateDropStatement(string procedureName)
+{
+	// check to see if this procedure has already been dropped.
+	if (!_droppedProcedureNames.Contains(procedureName))
+	{
+		Response.WriteLine("IF OBJECT_ID(N'{0}') IS NOT NULL", procedureName);
+		GenerateIndent(1);
+		Response.WriteLine("DROP PROCEDURE {0}", procedureName);
+		Response.WriteLine("");
+		
+		// add this procedure to the list of dropped procedures
+		_droppedProcedureNames.Add(procedureName);
+	}
+}
+
+public void GenerateDropViewStatement(string procedureName)
+{
+	// check to see if this procedure has already been dropped.
+	if (!_droppedProcedureNames.Contains(procedureName))
+	{
+		Response.WriteLine("IF OBJECT_ID(N'{0}') IS NOT NULL", procedureName);
+		GenerateIndent(1);
+		Response.WriteLine("DROP VIEW {0}", procedureName);
+		Response.WriteLine("");
+		
+		// add this procedure to the list of dropped procedures
+		_droppedProcedureNames.Add(procedureName);
+	}
+}
+
+public void GenerateDropFuncStatement(string procedureName)
+{
+	// check to see if this procedure has already been dropped.
+	if (!_droppedProcedureNames.Contains(procedureName))
+	{
+		Response.WriteLine("IF OBJECT_ID(N'{0}') IS NOT NULL", procedureName);
+		GenerateIndent(1);
+		Response.WriteLine("DROP FUNCTION {0}", procedureName);
+		Response.WriteLine("");
+		
+		// add this procedure to the list of dropped procedures
+		_droppedProcedureNames.Add(procedureName);
+	}
+}
+
+public void GenerateProcedureHeader(string procedureName)
+{ 
+	Response.WriteLine("");
+	Response.WriteLine("------------------------------------------------------------------------------------------------------------------------");
+	Response.WriteLine("-- Created by:    {0}  ", System.Environment.UserName ); 
+	Response.WriteLine("-- Description:   {0}", procedureName);
+	Response.WriteLine("-- Create date:   {0}", DateTime.Now.ToShortDateString());
+	Response.WriteLine("------------------------------------------------------------------------------------------------------------------------");
+}
+
+public void GenerateProcedureFooter(string procedureName)
+{
+	Response.WriteLine("--endregion");
+	Response.WriteLine("");
+	Response.WriteLine("GO");
+	Response.WriteLine("");
+}
+
+public void GenerateIndent(int indentLevel)
+{
+    for (int i = 0; i < indentLevel; i++)
+	{
+		Response.Write("    ");
+	}
+}
+
+public void GenerateParameter(ColumnSchema column, int indentLevel, bool isFirst, bool isLast)
+{
+	GenerateParameter(column, indentLevel, isFirst, isLast, false);
+}
+
+public void GenerateParameter(ColumnSchema column, int indentLevel, bool isFirst, bool isLast, bool isOutput)
+{
+    if (!isFirst) Response.WriteLine("");
+    GenerateIndent(indentLevel);
+    
+	Response.Write(GetSqlParameterStatement( column, isOutput));
+     
+ 	if (!isLast) Response.Write(",");
+	if (indentLevel >= 0)
+	{
+		//Response.WriteLine("");
+	}
+	else if (!isLast)
+	{
+		Response.Write("");
+	}
+}
+
+public void GenerateParameters(IList<MemberColumnSchema> columns, int indentLevel)
+{
+    GenerateParameters(ConvertMemberColumnSchemaToColumnSchema(columns), indentLevel, false);
+}
+
+public void GenerateParameters(IList<ColumnSchema> columns, int indentLevel)
+{
+	GenerateParameters(columns, indentLevel, false);
+}
+
+public void GenerateParameters(IList<ColumnSchema> columns, int indentLevel, bool includeTrailingComma)
+{
+	foreach(var column in FilterExcludedColumns(columns).AsIndexedEnumerable())
+	{
+		GenerateParameter(column.Value, indentLevel, column.IsFirst, column.IsLast && !includeTrailingComma);
+	}
+}
+
+
+#region Procedure Search 
+public void GenerateSearchColumn(ColumnSchema column, int indentLevel, bool isFirst, bool isLast)
+{
+	Response.Write(column.Name); 
+	if (!isLast) Response.Write(","); 
+}
+
+public void GenerateSearchColumns(IList<MemberColumnSchema> columns, int indentLevel)
+{
+    GenerateSearchColumns(ConvertMemberColumnSchemaToColumnSchema(columns), indentLevel);
+}
+
+public void GenerateSearchColumns(IList<ColumnSchema> columns, int indentLevel)
+{
+    foreach(var column in FilterExcludedColumns(columns).AsIndexedEnumerable())
+	{
+		GenerateSearchColumn(column.Value, indentLevel, column.IsFirst, column.IsLast);
+	}
+}
+
+ 
+
+public void GenerateSearchParameter(ColumnSchema column, int indentLevel, bool isFirst, bool isLast)
+{
+	GenerateSearchParameter(column, indentLevel, isFirst, isLast, false);
+}
+
+ 
+
+public void GenerateSearchParameter(ColumnSchema column, int indentLevel, bool isFirst, bool isLast, bool isOutput)
+{
+	GenerateIndent(indentLevel);
+	//Response.Write(GetSqlParameterStatement( column, isOutput));
+    if (!isFirst) Response.Write(",");
+    else Response.Write(" ");
+     Response.Write(GetSqlParameterStatement( column ));
+ 	//if (!isLast) Response.Write(",");
+	if (indentLevel >= 0)
+	{
+		Response.WriteLine("");
+	}
+	else if (!isLast)
+	{
+		Response.Write("");
+	}
+}
+
+public void GenerateSearchParameters(IList<MemberColumnSchema> columns, int indentLevel)
+{
+    GenerateSearchParameters(ConvertMemberColumnSchemaToColumnSchema(columns), indentLevel, false);
+}
+
+public void GenerateSearchParameters(IList<ColumnSchema> columns, int indentLevel)
+{
+	GenerateSearchParameters(columns, indentLevel, false);
+}
+
+public void GenerateSearchParameters(IList<ColumnSchema> columns, int indentLevel, bool includeTrailingComma)
+{
+	foreach(var column in FilterExcludedColumns(columns).AsIndexedEnumerable())
+	{
+		GenerateSearchParameter(column.Value, indentLevel, column.IsFirst, column.IsLast && !includeTrailingComma);
+	}
+}
+
+public void GenerateSearchWhereClauses(IList<ColumnSchema> columns, int indentLevel)
+{
+	foreach(var column in FilterExcludedColumns(columns).AsIndexedEnumerable())
+	{
+        
+		GenerateSearchWhereClause(column.Value,indentLevel);
+	}
+}
+
+public void GenerateSearchWhereClause(ColumnSchema column, int indentLevel) 
+{  
+      switch (column.DataType) 
+      {    
+            case DbType.DateTime: 
+            {   
+                GenerateIndent(indentLevel);
+                Response.WriteLine("IF (@" + column.Name + " IS NOT NULL) BEGIN");
+                GenerateIndent(indentLevel);
+                Response.WriteLine("  IF (LEN(@WhereClause)>0) SET @WhereClause=@WhereClause + ' AND ';");
+                GenerateIndent(indentLevel);
+                Response.WriteLine("  SET @WhereClause = @WhereClause + '(" + column.Name + "=''' + CONVERT(NVARCHAR, @" + column.Name + ") + ''')';");
+                //Response.WriteLine("     --Set @WhereClause = @WhereClause + @operation + '(" + column.Name + "=' + char(39) + DATEADD(day, 1,convert(varchar, @" + column.Name + ") + char(39) + '))'");
+                GenerateIndent(indentLevel);
+                //Response.WriteLine("     SET @operation = ' AND ';");
+                //GenerateIndent(indentLevel);
+                Response.WriteLine("END"); 
+                GenerateIndent(indentLevel);
+                Response.WriteLine("-------------------------------------------"); 
+                break; 
+            } 
+            case DbType.Decimal: 
+            {   
+                GenerateIndent(indentLevel);
+                Response.WriteLine("IF (@" + column.Name + ">0) BEGIN");
+                GenerateIndent(indentLevel);
+                Response.WriteLine("  IF (LEN(@WhereClause)>0) SET @WhereClause=@WhereClause + ' AND ';");
+                GenerateIndent(indentLevel);
+                Response.WriteLine("  SET @WhereClause = @WhereClause + '(" + column.Name + "=' +  CONVERT(NVARCHAR, @" + column.Name + ") + ')';");
+                GenerateIndent(indentLevel);
+                //Response.WriteLine("     SET @operation = ' AND ';");
+                //GenerateIndent(indentLevel);
+                Response.WriteLine("END"); 
+                GenerateIndent(indentLevel);
+                Response.WriteLine("-------------------------------------------"); 
+                break; 
+            } 
+            case DbType.Int16 : 
+            {   
+                GenerateIndent(indentLevel);
+                Response.WriteLine("IF (@" + column.Name + ">0) BEGIN");
+                GenerateIndent(indentLevel);
+                Response.WriteLine("  IF (LEN(@WhereClause)>0) SET @WhereClause=@WhereClause + ' AND ';");
+                GenerateIndent(indentLevel);
+                Response.WriteLine("  SET @WhereClause = @WhereClause + '(" + column.Name + "=' +  CONVERT(NVARCHAR, @" + column.Name + ") + ')';");
+                GenerateIndent(indentLevel);
+                //Response.WriteLine("     SET @operation = ' AND ';");
+                //GenerateIndent(indentLevel);
+                Response.WriteLine("END"); 
+                GenerateIndent(indentLevel);
+                Response.WriteLine("-------------------------------------------"); 
+                break; 
+            } 
+            case DbType.Int32: 
+            {   
+                GenerateIndent(indentLevel);
+                Response.WriteLine("IF (@" + column.Name + ">0) BEGIN");
+                GenerateIndent(indentLevel);
+                Response.WriteLine("  IF (LEN(@WhereClause)>0) SET @WhereClause=@WhereClause + ' AND ';");
+                GenerateIndent(indentLevel);
+                Response.WriteLine("  SET @WhereClause = @WhereClause + '(" + column.Name + "=' +  CONVERT(NVARCHAR, @" + column.Name + ") + ')';");
+                GenerateIndent(indentLevel);
+                //Response.WriteLine("     SET @operation = ' AND ';");
+                //GenerateIndent(indentLevel);
+                Response.WriteLine("END");
+                GenerateIndent(indentLevel);
+                Response.WriteLine("-------------------------------------------"); 
+                break; 
+            }
+            case DbType.Byte: 
+            {   
+                GenerateIndent(indentLevel);
+                Response.WriteLine("IF (@" + column.Name + ">0) BEGIN");
+                GenerateIndent(indentLevel);
+                Response.WriteLine("  IF (LEN(@WhereClause)>0) SET @WhereClause=@WhereClause + ' AND ';");
+                GenerateIndent(indentLevel);
+                Response.WriteLine("  SET @WhereClause = @WhereClause + '(" + column.Name + "=' +  CONVERT(NVARCHAR, @" + column.Name + ") + ')';");
+                GenerateIndent(indentLevel);
+                //Response.WriteLine("     SET @operation = ' AND ';");
+                //GenerateIndent(indentLevel);
+                Response.WriteLine("END");
+                GenerateIndent(indentLevel);
+                Response.WriteLine("-------------------------------------------"); 
+                break; 
+            } 
+            case DbType.Int64: 
+            {   
+                GenerateIndent(indentLevel);
+                Response.WriteLine("IF (@" + column.Name + ">0) BEGIN");
+                GenerateIndent(indentLevel);
+                Response.WriteLine("  IF (LEN(@WhereClause)>0) SET @WhereClause=@WhereClause + ' AND ';");
+				//GenerateIndent(indentLevel);
+				//Response.WriteLine("BEGIN");
+                GenerateIndent(indentLevel);
+                Response.WriteLine("     SET @WhereClause = @WhereClause + '(" + column.Name + "=' +  CONVERT(NVARCHAR, @" + column.Name + ") + ')';");
+                GenerateIndent(indentLevel);
+                //Response.WriteLine("     SET @operation = ' AND ';");
+                //GenerateIndent(indentLevel);
+                Response.WriteLine("END"); 
+                GenerateIndent(indentLevel);
+                Response.WriteLine("-------------------------------------------"); 
+                break; 
+            } 
+            case DbType.Double: 
+            {   
+                GenerateIndent(indentLevel);
+                Response.WriteLine("IF (@" + column.Name + ">0) BEGIN");
+                GenerateIndent(indentLevel);
+                Response.WriteLine("  IF (LEN(@WhereClause)>0) SET @WhereClause=@WhereClause+' AND ';");
+                GenerateIndent(indentLevel);
+                Response.WriteLine("  SET @WhereClause = @WhereClause + '(" + column.Name + "=' + CONVERT(NVARCHAR, @" + column.Name + ") + ')';");
+                GenerateIndent(indentLevel);
+                //Response.WriteLine("     SET @operation = ' AND ';");
+                //GenerateIndent(indentLevel);
+                Response.WriteLine("END"); 
+                GenerateIndent(indentLevel);
+                Response.WriteLine("-------------------------------------------"); 
+                break; 
+            } 
+            case DbType.Boolean: 
+            { 
+                GenerateIndent(indentLevel);
+                Response.WriteLine("IF (@" + column.Name + " IS NOT NULL) BEGIN");
+                GenerateIndent(indentLevel);
+                Response.WriteLine("  IF (LEN(@WhereClause)>0) SET @WhereClause=@WhereClause + ' AND ';");
+                GenerateIndent(indentLevel);
+                Response.WriteLine("  SET @WhereClause = @WhereClause + '(" + column.Name + "=' + CONVERT(NVARCHAR, @" + column.Name + ") + ')';");
+                GenerateIndent(indentLevel);
+                //Response.WriteLine("     SET @operation = ' AND ';");
+                //GenerateIndent(indentLevel);
+                Response.WriteLine("END");
+                GenerateIndent(indentLevel);
+                Response.WriteLine("-------------------------------------------");
+                break; 
+            } 
+             
+            case DbType.String: 
+            { 
+                GenerateIndent(indentLevel);
+                Response.WriteLine("IF (LEN(@" + column.Name + ")>0) BEGIN");
+                GenerateIndent(indentLevel);
+                Response.WriteLine("  IF (LEN(@WhereClause)>0) SET @WhereClause=@WhereClause + ' AND ';");
+                GenerateIndent(indentLevel);
+                Response.WriteLine("  SET @WhereClause = @WhereClause + '(" + column.Name + " LIKE N''%' + @" + column.Name + " + '%'')';");
+                //Response.WriteLine("     --Set @WhereClause = @WhereClause + @operation + ' (FREETEXT(" + column.Name + ", N' + char(39)  + @" + column.Name + " + char(39) + ' ))'");
+                GenerateIndent(indentLevel);
+                //Response.WriteLine("     SET @operation = ' AND ';");
+                //GenerateIndent(indentLevel);
+                Response.WriteLine("END");
+                GenerateIndent(indentLevel);
+                Response.WriteLine("-------------------------------------------");
+                break; 
+            }
+             
+            case DbType.AnsiString: 
+            { 
+                GenerateIndent(indentLevel);
+                Response.WriteLine("IF (LEN(@" + column.Name + ")>0) BEGIN");
+                GenerateIndent(indentLevel);
+                Response.WriteLine("  IF (LEN(@WhereClause)>0) SET @WhereClause=@WhereClause + ' AND ';");
+                GenerateIndent(indentLevel);
+                Response.WriteLine("  SET @WhereClause = @WhereClause + '(" + column.Name + " LIKE N''%' + @" + column.Name + " + '%'')';");
+                GenerateIndent(indentLevel);
+                //Response.WriteLine("     SET @operation = ' AND ';");
+                //GenerateIndent(indentLevel);
+                Response.WriteLine("END");
+                GenerateIndent(indentLevel);
+                Response.WriteLine("-------------------------------------------");
+                break;  
+            }
+              
+      }  
+}
+
+public string GetSqlParameterStatement(ColumnSchema column) 
+{ 
+      string param = "@" + column.Name + " " + column.NativeType.ToString().ToUpper(); 
+      switch (column.DataType) 
+      { 
+            case DbType.Decimal: 
+            { 
+                  param += "=0"; 
+                  break; 
+            } 
+            case DbType.DateTime: 
+            { 
+                  param += "=null"; 
+                  break; 
+            } 
+            case DbType.Boolean: 
+            { 
+                  param += "=null"; 
+                  break; 
+            } 
+            case DbType.Binary: 
+            { 
+                  param += "=null"; 
+                  break; 
+            } 
+            case DbType.Currency: 
+            { 
+                  param += "=null"; 
+                  break; 
+            }
+            case DbType.Double: 
+            { 
+                  param += "=0"; 
+                  break; 
+            }
+            
+            case DbType.String: 
+            { 
+                if(column.Size >0){
+                  param += "(" + column.Size + ")=''"; 
+                }
+                else
+                	{
+                	   param += "(MAX)=''";       
+                        
+                	}
+                  break; 
+            }
+            case DbType.UInt16: 
+            { 
+                  param += "=0"; 
+                  break; 
+            }
+            case DbType.UInt32: 
+            { 
+                  param += "=0";  
+                  break; 
+            }
+            case DbType.UInt64: 
+            { 
+                  param += "=0";  
+                  break; 
+            }
+            case DbType.VarNumeric: 
+            { 
+                  param += "=0"; 
+                  break; 
+            }
+            case DbType.AnsiString: 
+            { 
+                  param += "(" + column.Size + ")=''"; 
+                  break;  
+            }
+            case DbType.Single: 
+            { 
+                  param += "=0"; 
+                  break;  
+            }
+            case DbType.Int16: 
+            { 
+                  param += "=0"; 
+                  break; 
+            }
+            case DbType.Int32: 
+            { 
+                  param += "=0"; 
+                  break;  
+            }
+            case DbType.Int64: 
+            { 
+                  param += "=0"; 
+                  break;  
+            }
+            case DbType.Byte:
+            { 
+                  param += "=0"; 
+                  break;  
+            }
+            default: 
+            { 
+                  if (column.Size > 0)  
+                  { 
+                        param += "(" + column.Size + ")"; 
+                  }  
+                  break; 
+            } 
+      } 
+      return param; 
+}
+
+#endregion
+#region GenerateColumns
+public void GenerateColumns(IList<MemberColumnSchema> columns, int indentLevel)
+{
+    GenerateColumns(ConvertMemberColumnSchemaToColumnSchema(columns), indentLevel);
+}
+
+public void GenerateColumns(IList<ColumnSchema> columns, int indentLevel)
+{
+    foreach(var column in FilterExcludedColumns(columns).AsIndexedEnumerable())
+	{
+		GenerateColumn(column.Value, indentLevel, column.IsFirst, column.IsLast);
+	}
+}
+
+public void GenerateColumn(ColumnSchema column, int indentLevel, bool isFirst, bool isLast)
+{
+    if (!isFirst) {
+        //Response.WriteLine("");
+        GenerateIndent(indentLevel);
+        Response.Write(",");
+    }
+    
+	Response.Write("[");
+	Response.Write(column.Name);
+	Response.Write("]");
+	//if (!isLast) Response.Write(",");
+	if (indentLevel >= 0)
+	{
+		//Response.WriteLine("");
+	}
+	else if (!isLast)
+	{
+		Response.Write(" ");
+	}
+}
+#endregion
+
+
+#region NullGenerateColumns
+public void GenerateNullColumns(IList<MemberColumnSchema> columns, int indentLevel)
+{
+    GenerateColumns(ConvertMemberColumnSchemaToColumnSchema(columns), indentLevel);
+}
+
+public void GenerateNullColumns(IList<ColumnSchema> columns, int indentLevel)
+{
+    foreach(var column in FilterExcludedColumns(columns).AsIndexedEnumerable())
+	{
+		GenerateNullColumn(column.Value, indentLevel, column.IsFirst, column.IsLast);
+	}
+}
+public void GenerateNullColumn(ColumnSchema column, int indentLevel, bool isFirst, bool isLast)
+{
+    if (!isFirst) {
+        //Response.WriteLine("");
+        GenerateIndent(indentLevel);
+        Response.Write(",");
+    }
+	Response.Write("NULL AS [");
+	Response.Write(column.Name);
+	Response.Write("]");
+	//if (!isLast) Response.Write(",");
+	if (indentLevel >= 0)
+	{
+		//Response.WriteLine("");
+	}
+	else if (!isLast)
+	{
+		Response.Write("    ");
+	}
+}
+#endregion
+public void GenerateUpdate(ColumnSchema column, int indentLevel, bool isFirst, bool isLast)
+{
+	GenerateIndent(indentLevel);
+    if (!isFirst) Response.Write(",");
+	Response.Write("[");
+	Response.Write(column.Name);
+	Response.Write("] = @");
+	Response.Write(column.Name);
+	//if (!isLast) Response.Write(",");
+	if (indentLevel >= 0)
+	{
+		Response.WriteLine("");
+	}
+	else if (!isLast)
+	{
+		Response.Write("    ");
+	}
+}
+
+public void GenerateUpdates(IList<ColumnSchema> columns, int indentLevel)
+{
+    foreach(var column in FilterExcludedColumnsUpdate(columns).AsIndexedEnumerable())
+	{
+		GenerateUpdate(column.Value, indentLevel, column.IsFirst, column.IsLast);
+	}
+}
+
+public void GenerateCondition(ColumnSchema column, int indentLevel, bool isFirst, bool isLast)
+{
+	if (!isFirst) GenerateIndent(indentLevel);
+	if (!isFirst) Response.Write("AND ");
+	Response.Write("[");
+	Response.Write(column.Name);
+	Response.Write("] = @");
+	Response.Write(column.Name);
+	if (indentLevel >= 0)
+	{
+		//Response.WriteLine("");
+	}
+	else if (!isLast)
+	{
+		Response.Write(" ");
+	}
+}
+
+public void GenerateConditions(IList<MemberColumnSchema> columns, int indentLevel)
+{
+    GenerateConditions(ConvertMemberColumnSchemaToColumnSchema(columns), indentLevel);
+}
+
+public void GenerateConditions(IList<ColumnSchema> columns, int indentLevel)
+{
+    foreach(var column in FilterExcludedColumns(columns).AsIndexedEnumerable())
+	{
+		GenerateCondition(column.Value, indentLevel, column.IsFirst, column.IsLast);
+	}
+}
+
+public void GenerateVariable(ColumnSchema column, int indentLevel, bool isFirst, bool isLast)
+{
+    //if (!isFirst) Response.WriteLine("");
+	GenerateIndent(indentLevel);
+    if (!isFirst) Response.Write(",");
+    else Response.Write("");
+	Response.Write("@");
+	Response.Write(column.Name);
+	//if (!isLast) Response.Write(",");
+	if (indentLevel >= 0)
+	{
+		//Response.WriteLine("");
+	}
+	else if (!isLast)
+	{
+		Response.Write("");
+	}
+}
+
+public void GenerateVariables(List<ColumnSchema> columns, int indentLevel)
+{
+	foreach(var column in FilterExcludedColumns(columns).AsIndexedEnumerable())
+	{
+		GenerateVariable(column.Value, indentLevel, column.IsFirst, column.IsLast);
+	}
+}
+
+public void GenerateVariables(IList<ColumnSchema> columns, int indentLevel)
+{
+	foreach(var column in FilterExcludedColumns(columns).AsIndexedEnumerable())
+	{
+		GenerateVariable(column.Value, indentLevel, column.IsFirst, column.IsLast);
+	}
+}
+
+public void GenerateOrderByClause()
+{
+	if (OrderByExpression != null && OrderByExpression.Trim().Length > 0)
+	{
+		Response.WriteLine("ORDER BY");
+		GenerateIndent(1);
+		Response.WriteLine(OrderByExpression);
+	}
+}
+
+public IList<MemberColumnSchema> FilterReadOnlyColumns(IList<MemberColumnSchema> columns)
+{
+    return columns.Where(c => !ColumnIsReadOnly(c)).ToList();
+}
+
+public List<ColumnSchema> FilterExcludedColumns(IList<ColumnSchema> columns)
+{
+	return columns.Where(c => !ColumnIsExcluded(c)).ToList();
+}
+public List<ColumnSchema> FilterExcludedColumnsUpdate(IList<ColumnSchema> columns)
+{
+	return columns.Where(c => !ColumnIsExcludedUpdate(c)).ToList();
+}
+public List<ColumnSchema> FilterReadOnlyAndExcludedColumns(IList<ColumnSchema> columns)
+{
+    return columns.Where(c => !ColumnIsExcludedOrReadOnly(c)).ToList();
+}
+public List<ColumnSchema> FilterReadOnlyAndExcludedColumnsInsert(IList<ColumnSchema> columns)
+{
+    return columns.Where(c => !ColumnIsExcludedOrReadOnlyInsert(c)).ToList();
+}
+public List<ColumnSchema> FilterReadOnlyAndExcludedColumnsUpdate(IList<ColumnSchema> columns)
+{
+    return columns.Where(c => !ColumnIsExcludedOrReadOnlyUpdate(c)).ToList();
+}
+public List<ColumnSchema> FilterReadOnlyAndExcludedColumnsSearch(IList<ColumnSchema> columns)
+{
+    return columns.Where(c => !ColumnIsExcludedOrReadOnlySearch(c)).ToList();
+}
+
+private Regex excludedColumnRegex = null;
+
+public bool ColumnIsExcluded(ColumnSchema column)
+{
+	if (column.IsPrimaryKeyMember) return false;
+	
+	if (excludedColumnRegex == null)
+	{
+		if (ExcludedColumns != null && ExcludedColumns.Count > 0)
+		{
+			string excluded = String.Empty;
+			for (int i = 0; i < ExcludedColumns.Count; i++)
+			{
+				if (ExcludedColumns[i].Trim().Length > 0)
+				{
+					excluded += "(" + Regex.Escape(ExcludedColumns[i]).Replace("\\*", ".*?") + ")|";
+				}
+			}
+			
+			if (excluded.Length > 0)
+			{
+				excluded = excluded.Substring(0, excluded.Length - 1);
+				excludedColumnRegex = new Regex(excluded, RegexOptions.IgnoreCase);
+			}
+		}
+	}
+	
+	if (excludedColumnRegex != null && excludedColumnRegex.IsMatch(column.Name)) return true;
+	
+	return false;
+}
+public bool ColumnIsExcludedUpdate(ColumnSchema column)
+{
+	if (column.IsPrimaryKeyMember) return false;
+	if (column.Name == "CrDateTime"  || column.Name == "LastUpdated" || column.Name == "CrUserId") return true;
+	if (excludedColumnRegex == null)
+	{
+		if (ExcludedColumns != null && ExcludedColumns.Count > 0)
+		{
+			string excluded = String.Empty;
+			for (int i = 0; i < ExcludedColumns.Count; i++)
+			{
+				if (ExcludedColumns[i].Trim().Length > 0)
+				{
+					excluded += "(" + Regex.Escape(ExcludedColumns[i]).Replace("\\*", ".*?") + ")|";
+				}
+			}
+			
+			if (excluded.Length > 0)
+			{
+				excluded = excluded.Substring(0, excluded.Length - 1);
+				excludedColumnRegex = new Regex(excluded, RegexOptions.IgnoreCase);
+			}
+		}
+	}
+	
+	if (excludedColumnRegex != null && excludedColumnRegex.IsMatch(column.Name)) return true;
+	
+	return false;
+}
+
+public bool ColumnIsExcludedOrReadOnlySearch(ColumnSchema column)
+{
+	return ColumnIsExcluded(column) || ColumnIsReadOnly(column) || column.Name == "CrDateTime"  || column.Name == "LastUpdated";
+}
+private Regex readOnlyColumnRegex = null;
+
+public bool ColumnIsReadOnly(ColumnSchema column)
+{
+	if (column.IsPrimaryKeyMember) return false;
+	
+	if (readOnlyColumnRegex == null)
+	{
+		if (ReadOnlyColumns != null && ReadOnlyColumns.Count > 0)
+		{
+			string readOnly = String.Empty;
+			for (int i = 0; i < ReadOnlyColumns.Count; i++)
+			{
+				if (ReadOnlyColumns[i].Trim().Length > 0)
+				{
+					readOnly += "(" + Regex.Escape(ReadOnlyColumns[i]).Replace("\\*", ".*?") + ")|";
+				}
+			}
+			
+			if (readOnly.Length > 0)
+			{
+				readOnly = readOnly.Substring(0, readOnly.Length - 1);
+				readOnlyColumnRegex = new Regex(readOnly, RegexOptions.IgnoreCase);
+			}
+		}
+	}
+	
+	if (readOnlyColumnRegex != null && readOnlyColumnRegex.IsMatch(column.Name)) return true;
+	
+	return false;
+}
+
+public bool ColumnIsExcludedOrReadOnlyInsert(ColumnSchema column)
+{
+	return ColumnIsExcluded(column) || ColumnIsReadOnly(column) || column.Name == "CrDateTime"  || column.Name == "LastUpdated" || column.Name == "LastUpdatedUserId";
+}
+public bool ColumnIsExcludedOrReadOnlyUpdate(ColumnSchema column)
+{
+	return ColumnIsExcluded(column) || ColumnIsReadOnly(column) || column.Name == "CrDateTime"  || column.Name == "LastUpdated" || column.Name == "CrUserId";
+}
+public bool ColumnIsExcludedOrReadOnly(ColumnSchema column)
+{
+	return ColumnIsExcluded(column) || ColumnIsReadOnly(column);
+}
+#endregion
+
+#region Procedure Naming
+public string GetFunctionGetIDByName()
+{
+	return String.Format("{0}[{1}{2}_GetIdByName]", GetTableOwner(), ProcedurePrefix, GetEntityName(false));
+} 
+public string GetSystemErrorsProcedureName()
+{
+	return String.Format("{0}[{1}{2}_Insert_Quick]", GetTableOwner(), ProcedurePrefix, "SystemErrors");
+} 
+public string GetViewsName(String strEndFix)
+{
+	return String.Format("{0}[{1}v${2}{3}]", GetTableOwner(), ProcedurePrefix, GetEntityName(false),strEndFix);
+} 
+
+public string GetSearchProcedureName()
+{
+	return String.Format("{0}[{1}{2}_GetPage]", GetTableOwner(), ProcedurePrefix, GetEntityName(false));
+} 
+
+public string GetGetListProcedureName()
+{
+	return String.Format("{0}[{1}{2}_GetList]", GetTableOwner(), ProcedurePrefix, GetEntityName(false));
+} 
+
+public string GetInsertProcedureName()
+{
+	return String.Format("{0}[{1}{2}_Insert]", GetTableOwner(), ProcedurePrefix, GetEntityName(false));
+}
+
+public string GetInsertQuickProcedureName()
+{
+	return String.Format("{0}[{1}{2}_Insert_Quick]", GetTableOwner(), ProcedurePrefix, GetEntityName(false));
+}
+
+public string GetUpdateProcedureName()
+{
+	return String.Format("{0}[{1}{2}_Update]", GetTableOwner(), ProcedurePrefix, GetEntityName(false));
+}
+
+public string GetUpdateQuickProcedureName()
+{
+	return String.Format("{0}[{1}{2}_Update_Quick]", GetTableOwner(), ProcedurePrefix, GetEntityName(false));
+}
+public string GetInsertUpdateProcedureName()
+{
+	return String.Format("{0}[{1}{2}_InsertUpdate]", GetTableOwner(), ProcedurePrefix, GetEntityName(false));
+}
+
+public string GetDeleteProcedureName()
+{
+	return String.Format("{0}[{1}{2}_Delete]", GetTableOwner(), ProcedurePrefix, GetEntityName(false));
+}
+
+public string GetDeleteQuickProcedureName()
+{
+	return String.Format("{0}[{1}{2}_Delete_Quick]", GetTableOwner(), ProcedurePrefix, GetEntityName(false));
+}
+
+public string GetSelectProcedureName()
+{
+	return String.Format("{0}[{1}{2}_GetById]", GetTableOwner(), ProcedurePrefix, GetEntityName(false));
+}
+
+public string GetSelectAllProcedureName()
+{
+	return String.Format("{0}[{1}{2}_GetAll]", GetTableOwner(), ProcedurePrefix, GetEntityName(false));
+}
+
+public string GetSelectPagedProcedureName()
+{
+	return String.Format("{0}[{1}{2}_SelectPaged]", GetTableOwner(), ProcedurePrefix, GetEntityName(false));
+}
+
+public string GetSelectByProcedureName(IList<MemberColumnSchema> targetColumns)
+{
+    return GetSelectByProcedureName(ConvertMemberColumnSchemaToColumnSchema(targetColumns));
+}
+
+public string GetSelectByProcedureName(IList<ColumnSchema> targetColumns)
+{
+	return String.Format("{0}[{1}{2}_GetBy{3}]", GetTableOwner(), ProcedurePrefix, GetEntityName(false), GetBySuffix(targetColumns));
+}
+
+public string GetSelectDynamicProcedureName()
+{
+	return String.Format("{0}[{1}{2}_SelectDynamic]", GetTableOwner(), ProcedurePrefix, GetEntityName(false));
+}
+
+
+public string GetDeleteByProcedureName(IList<MemberColumnSchema> targetColumns)
+{
+    return GetDeleteByProcedureName(ConvertMemberColumnSchemaToColumnSchema(targetColumns));
+}
+
+private IList<ColumnSchema> ConvertMemberColumnSchemaToColumnSchema(IList<MemberColumnSchema> memberColumns)
+{
+    var columns = new List<ColumnSchema>();
+    columns.AddRange(memberColumns.Cast<ColumnSchema>());
+    return columns;
+}
+//add 2014
+public string GetInsertOrUpdateProcedureName()
+{
+	return String.Format("{0}[{1}{2}_InsertOrUpdate]", GetTableOwner(), ProcedurePrefix, GetEntityName(false));
+}
+public string GetExistFuntionName()
+{
+	return String.Format("{0}[{1}{2}_Exists]", GetTableOwner(), ProcedurePrefix, GetEntityName(false));
+}
+
+// end 2014
+public string GetDeleteByProcedureName(IList<ColumnSchema> targetColumns)
+{
+	return String.Format("{0}[{1}{2}_Delete_Quick_By{3}]", GetTableOwner(), ProcedurePrefix, GetEntityName(false), GetBySuffix(targetColumns));
+}
+
+public string GetDeleteDynamicProcedureName()
+{
+	return String.Format("{0}[{1}{2}_DynamicDelete]", GetTableOwner(), ProcedurePrefix, GetEntityName(false));
+}
+
+public string GetRecursionDeleteProcedureName()
+{
+	return String.Format("{0}[{1}{2}_RecursionDelete]", GetTableOwner(), ProcedurePrefix, GetEntityName(false));
+}
+
+public string GetEntityName(bool plural)
+{
+	string entityName = SourceTable.Name;
+	/*
+	if (entityName.StartsWith(TablePrefix))
+	{
+		entityName = entityName.Substring(TablePrefix.Length);
+	}
+	
+	if (plural)
+	{
+		entityName = StringUtil.ToPlural(entityName);
+	}
+	else
+	{
+		entityName = StringUtil.ToSingular(entityName);
+	}
+	*/
+	return entityName;
+}
+
+public string GetBySuffix(IList<ColumnSchema> columns)
+{
+    System.Text.StringBuilder bySuffix = new System.Text.StringBuilder();
+    foreach(var column in columns.AsIndexedEnumerable())
+	{
+	    if ((column.IsFirst)==false)
+            bySuffix.Append("And");
+	    bySuffix.Append(column.Value.Name);
+	}
+	
+	return bySuffix.ToString();
+}
+#endregion
+
+#region Template Overrides
+// Assign an appropriate file name to the output.
+public override string GetFileName()
+{
+	if (this.SourceTable != null)
+	{
+		return this.SourceTable.Name + "_Procedures.sql";
+	}
+	else
+	{
+		return base.GetFileName();
+	}
+}
+
+// Override the OutputFile property and assign our specific settings to it.
+[Category("2. Options")]
+[FileDialog(FileDialogType.Save, Title="Select Output File", Filter="Query Files (*.sql)|*.sql|All Files (*.*)|*.*", DefaultExtension=".sql")]
+public override string OutputFile
+{
+	get {return base.OutputFile;}
+	set {base.OutputFile = value;}
+}
+
+protected override void OnPostRender(string result) 
+{
+	if (this.AutoExecuteScript)
+	{
+		// execute the output on the same database as the source table.
+		CodeSmith.BaseTemplates.ScriptResult scriptResult = CodeSmith.BaseTemplates.ScriptUtility.ExecuteScript(this.SourceTable.Database.ConnectionString, result, new System.Data.SqlClient.SqlInfoMessageEventHandler(cn_InfoMessage)); 
+		Trace.WriteLine(scriptResult.ToString());
+	}
+	
+	base.OnPostRender(result);
+}
+
+private void cn_InfoMessage(object sender, System.Data.SqlClient.SqlInfoMessageEventArgs e)
+{
+	Trace.WriteLine(e.Message);
+}
+#endregion
+
+</script>

@@ -1,0 +1,335 @@
+﻿<%------------------------------------------------------------------------------------------
+*  Developer:   huyht
+------------------------------------------------------------------------------------------%>
+<%@ CodeTemplate Language="VB" TargetLanguage="VB" Encoding="UTF-8" Description="Generates a very simple business object." %>
+<%@ Property Name="SourceTable" Type="SchemaExplorer.TableSchema" Category="Context" Description="Table that the object is based on." %>
+<%@ Property Name="RootNamespace"  Type="System.String"  Default="" Category="Options" %> 
+<%@ Property Name="TablePrefix"  Type="System.String"  Default="" Category="Options" %>
+<%@ Assembly Name="SchemaExplorer" %>
+<%@ Assembly Name="System.Data" %>
+<%@ Import Namespace="SchemaExplorer" %>
+<%@ Import Namespace="System.Data" %>
+<%@ Map Name="DbDataReader" Src="DbType-DataReaderMethod" Description="DbType to DataReader Method Map" %>
+<%@ Map Name="SqlNativeSqlDb" Src="SqlNativeType-SqlDbType" Description="SqlNativeType to SqlDbType Map" %> 
+<%%@ Page Language="C#" MasterPageFile="~/admin/MasterPageAdmin.master" AutoEventWireup="true" CodeFile="<%= SourceTable.Name %><%= Me.TablePrefix %>.aspx.cs" Inherits="page_<%= SourceTable.Name %>" Title="" %%>
+<%%@ Register Assembly="obout_Calendar2_Net" Namespace="OboutInc.Calendar2" TagPrefix="obout" %%>
+<%%@ Register Assembly="FredCK.FCKeditorV2" Namespace="FredCK.FCKeditorV2" TagPrefix="FCKeditorV2" %%>
+<asp:Content ID="Content1" ContentPlaceHolderID="m_contentBody" Runat="Server">
+<script type="text/javascript">
+    function SelectAll(CheckBoxControl) {
+        if (CheckBoxControl.checked == true) {
+            var i;
+            for (i = 0; i < document.forms[0].elements.length; i++) {
+                if ((document.forms[0].elements[i].type == 'checkbox') && (document.forms[0].elements[i].name.indexOf('chkAction') > -1)) {
+                    document.forms[0].elements[i].checked = true;
+                }
+            }
+        }
+        else {
+            var i;
+            for (i = 0; i < document.forms[0].elements.length; i++) {
+                if ((document.forms[0].elements[i].type == 'checkbox') && (document.forms[0].elements[i].name.indexOf('chkAction') > -1)) {
+                    document.forms[0].elements[i].checked = false;
+                }
+            }
+        }
+    }
+</script>
+<style type="text/css">
+    .<%= Lcase(SourceTable.Name) %>-view-1 { width: 150px; text-align: left; }
+    .<%= Lcase(SourceTable.Name) %>-view-2 { text-align: left; }
+    .<%= Lcase(SourceTable.Name) %>-edit-1 { width: 150px; text-align: left; }
+    .<%= Lcase(SourceTable.Name) %>-edit-2 { text-align: left; }
+    .<%= Lcase(SourceTable.Name) %>-total { text-align: left; }
+    .style1
+    {
+        width: 100%;
+    }
+    .style2
+    {
+        width: 80px;
+        text-align: left;
+    }
+    .style3
+    {
+        width: 80px;
+        text-align: left;
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: small;
+    }
+    .style4
+    {
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: small;
+        font-weight: bold;
+        border-left-color: #808080;
+        border-right-color: #C0C0C0;
+        border-top-color: #808080;
+        border-bottom-color: #C0C0C0;
+        padding: 1px;
+    }
+    .style5
+    {
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: small;
+        font-weight: bold;
+        color: #FF0000;
+        border-left-color: #808080;
+        border-right-color: #C0C0C0;
+        border-top-color: #808080;
+        border-bottom-color: #C0C0C0;
+        padding: 1px;
+    }
+    .style6
+    {
+        width: 150px;
+        text-align: left;
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: small;
+    }
+    .style7
+    {
+        text-align: left;
+        font-family: Arial, Helvetica, sans-serif;
+        font-weight: bold;
+        font-size: medium;
+        color: #0000FF;
+    }
+</style>  
+<table class="tableBorder" cellspacing="1" cellpadding="2" align="center" width="98%">
+    <tr class="tbHeaderRow">
+        <td align="left" class="tableHeaderText">
+            &nbsp;Title
+        </td>
+    </tr>
+    <tr>
+        <td width="100%">
+            <table id="tblView" cellspacing="1" cellpadding="2" width="100%" border="0" runat="server">
+                <tr>
+                    <td>
+                        <table cellspacing="0" cellpadding="2" width="100%" border="0">
+                            <tr>
+                                <td class="style3">
+                                    Nội dung:</td>
+                                <td class="businesses-view-2"> 
+                        <asp:TextBox ID="txtSearch" runat="server"></asp:TextBox>
+                                </td>
+                            </tr>
+                            <% For i As Integer = 0 To SourceTable.ForeignKeyColumns.Count - 1 %> 
+                            <tr>
+                                <td class="style3"><%= Iif(SourceTable.ForeignKeyColumns(i).Description<>"",SourceTable.ForeignKeyColumns(i).Description,SourceTable.ForeignKeyColumns(i).Name.Replace("ID","")) %>:</td>
+                                <td class="businesses-view-2"> 
+                        <asp:DropDownList onselectedindexchanged="ddl<%= SourceTable.NonPrimaryKeyColumns(i).Name %>_S_SelectedIndexChanged"  ID="ddl<%= SourceTable.ForeignKeyColumns(i).Name %>_S" DataTextField="<%= SourceTable.ForeignKeyColumns(i).Name.Replace("ID","Name") %>" DataValueField="<%= SourceTable.ForeignKeyColumns(i).Name %>" runat="server" AutoPostBack="True">
+                        </asp:DropDownList>
+                                </td>
+                            </tr> 
+                            <% Next i %>
+                            <tr>
+                                <td class="style3">
+                                    Sắp xếp:</td>
+                                <td class="businesses-view-2"> 
+                        <asp:DropDownList onselectedindexchanged="ddlOrderBy_SelectedIndexChanged" ID="ddlOrderBy" runat="server" AutoPostBack="True">
+                        <asp:ListItem Value="<%=SourceTable.PrimaryKey.MemberColumns(0).Name%> DESC">Mới thêm</asp:ListItem>
+                        </asp:DropDownList>
+                                </td>
+                            </tr>                            
+                            <tr>
+                                <td class="style2">
+                                    &nbsp;</td>
+                                <td class="businesses-view-2"> 
+                        <asp:Button ID="btnSearch" runat="server" Text="Tìm kiếm" Width="80px" />
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+                <tr>
+                    <td  class="businesses-total">
+                        <table cellspacing="0" class="style1">
+                            <tr>
+                                <td>
+                                    <span class="style4">Tổng số:</span>
+                        <asp:Label ID="lbTotalRecord" runat="server" EnableViewState="False" Font-Bold="True" 
+                                        Font-Names="Arial" Font-Size="10pt"></asp:Label>
+                                </td>
+                                <td align="right">
+                                    <asp:LinkButton onclick="lnbAddNew_Click" ID="lnbAddNew" runat="server" CssClass="LinkButton" 
+                                        Font-Bold="True" Font-Names="Arial" Font-Size="10pt">Thêm mới</asp:LinkButton>
+                                    &nbsp;| <span class="style5">Thao tác </span>
+                                    <asp:DropDownList onselectedindexchanged="ddlAction_SelectedIndexChanged" ID="ddlAction" runat="server" AutoPostBack="True">
+                                        <asp:ListItem Value="notset">Chọn thao tác...</asp:ListItem>
+                                        <asp:ListItem Value="delete">Xóa</asp:ListItem>
+                                    </asp:DropDownList>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <asp:DataGrid ID="DgItem" runat="server" Width="100%" AutoGenerateColumns="False" DataKeyField="<%= SourceTable.PrimaryKey.MemberColumns(0).Name %>"
+                            CellPadding="4"  AllowCustomPaging="true" AllowPaging="true" AllowSorting="True" PageSize="50" BorderColor="Silver" BorderWidth="1px"
+							OnPageIndexChanging = "DgItem_PageIndexChanging"
+							OnEditCommand="DgItem_EditCommand"
+                			OnDeleteCommand="DgItem_DeleteCommand"
+							OnItemCreated="DgItem_ItemCreated">
+                            <ItemStyle CssClass="GridItemStyle" Font-Names="Arial" Font-Overline="False" Font-Size="10pt"></ItemStyle>
+                            <HeaderStyle CssClass="GridHeaderStyle"></HeaderStyle>
+                            <AlternatingItemStyle CssClass="GridAltItemStyle" />
+                            <FooterStyle CssClass="GridFooterStyle" />
+                            <PagerStyle HorizontalAlign="Center" Mode="NumericPages"></PagerStyle>
+                            <Columns>                              
+                                <% For i As Integer = 0 To SourceTable.Columns.Count - 1 %> 
+                                <%   
+                                Select Case SourceTable.Columns(i).DataType %>
+                                       <% Case DbType.Guid %>
+                                       <% Case DbType.AnsiString, DbType.AnsiStringFixedLength, DbType.[String], DbType.StringFixedLength %> 
+                                             <asp:TemplateColumn HeaderText="<%= Iif(SourceTable.Columns(i).Description<>"",SourceTable.Columns(i).Description,SourceTable.Columns(i).Name) %>">  
+                                                <ItemTemplate> 
+                                                    <asp:Literal ID="lt<%= SourceTable.Columns(i).Name %>" runat="server" EnableViewState="false" Text='<%%# Eval("<%= SourceTable.Columns(i).Name %>") %%>'></asp:Literal> 
+                                                </ItemTemplate>
+                                                <ItemStyle  HorizontalAlign="Left" />
+                                            </asp:TemplateColumn> 
+                                          <% Case DbType.Date, DbType.DateTime  %>
+                                           <asp:TemplateColumn HeaderText="<%= Iif(SourceTable.Columns(i).Description<>"",SourceTable.Columns(i).Description,SourceTable.Columns(i).Name) %>">  
+                                                <ItemTemplate>  
+                                                 <asp:Literal ID="lt<%= SourceTable.Columns(i).Name %>" runat="server" EnableViewState="false" Text='<%%# String.Format("{0:dd/MM/yyyy}", Iif(Eval("<%= SourceTable.Columns(i).Name %>")=DateTime.MinValue,"",Eval("<%= SourceTable.Columns(i).Name %>"))) %%>'></asp:Literal> 
+                                                </ItemTemplate>
+                                                <ItemStyle  HorizontalAlign="Left" />
+                                            </asp:TemplateColumn>
+                                        <% Case DbType.Boolean %>
+                                           <asp:TemplateColumn HeaderText="<%= Iif(SourceTable.Columns(i).Description<>"",SourceTable.Columns(i).Description,SourceTable.Columns(i).Name) %>">  
+                                                <ItemTemplate>  
+                                                <asp:CheckBox ID="chkg<%= SourceTable.Columns(i).Name %>" runat="server" EnableViewState="false" Checked='<%%# Eval("<%= SourceTable.Columns(i).Name %>") %%>' />
+                                                </ItemTemplate>
+                                                <ItemStyle  HorizontalAlign="Left" />
+                                            </asp:TemplateColumn>
+                                        <% Case Else %>
+                                            <asp:TemplateColumn HeaderText="<%= Iif(SourceTable.Columns(i).Description<>"",SourceTable.Columns(i).Description,SourceTable.Columns(i).Name) %>">  
+                                                <ItemTemplate> 
+                                                    <asp:Literal ID="lt<%= SourceTable.Columns(i).Name %>" runat="server" EnableViewState="false" Text='<%%# <%=Iif(SourceTable.Columns(i).IsForeignKeyMember,"Get" & SourceTable.Columns(i).Name.Replace("ID","") & "Name(","")%>Eval("<%= SourceTable.Columns(i).Name %>")<%=Iif(SourceTable.Columns(i).IsForeignKeyMember,")","")%> %%>'></asp:Literal> 
+                                                </ItemTemplate>
+                                                <ItemStyle  HorizontalAlign="Left" />
+                                            </asp:TemplateColumn>
+                                <% End Select %> 
+                                <% Next i %> 
+                              
+                                <asp:TemplateColumn HeaderText="Sửa">
+                                    <HeaderStyle Width="6%"></HeaderStyle>
+                                    <ItemStyle HorizontalAlign="Center"></ItemStyle>
+                                    <ItemTemplate>
+                                        <asp:LinkButton ID="lnbEdit" runat="server" CommandName="Edit" Text="Sửa"></asp:LinkButton>
+                                    </ItemTemplate>
+                                </asp:TemplateColumn>
+                                <asp:TemplateColumn HeaderText="Xóa">
+                                    <HeaderStyle Width="6%"></HeaderStyle>
+                                    <ItemStyle HorizontalAlign="Center"></ItemStyle>
+                                    <ItemTemplate>
+                                        <asp:LinkButton ID="lnbDelete" runat="server" CommandName="Delete" Text="Xóa"></asp:LinkButton>
+                                    </ItemTemplate>
+                                </asp:TemplateColumn>
+                                <asp:TemplateColumn>
+									<HeaderStyle Width="3%"></HeaderStyle>
+									<ItemStyle HorizontalAlign="Center"></ItemStyle>
+									<HeaderTemplate>
+										<input type="CheckBox" name="SelectAllCheckBox" onclick="SelectAll(this)">
+									</HeaderTemplate>
+									<ItemTemplate>
+										<asp:CheckBox id="chkAction" runat="server"></asp:CheckBox>
+									</ItemTemplate>
+                                </asp:TemplateColumn>
+                            </Columns>
+                            
+                        </asp:DataGrid>
+                    </td>
+                </tr>
+            </table>
+            <table id="tblEdit" runat="server" cellspacing="0" cellpadding="3" width="100%" border="0">
+                <tr>
+                    <td class="<%= Lcase(SourceTable.Name) %>-edit-1">
+                        &nbsp;</td>
+                    <td class="style6">
+                        &nbsp;</td>
+                    <td class="style7">
+                        <br />
+                        Thêm mới/Sửa<br />
+                        &nbsp;</td>
+                </tr> 
+                 <% For i As Integer = 0 To SourceTable.NonPrimaryKeyColumns.Count - 1 %> 
+                 <% If SourceTable.NonPrimaryKeyColumns(i).IsForeignKeyMember Then %>
+                 <tr>
+                    <td class="<%= Lcase(SourceTable.Name) %>-edit-1">
+                        &nbsp;</td>
+                    <td class="style6">
+                       <%= Iif(SourceTable.NonPrimaryKeyColumns(i).Description<>"",SourceTable.NonPrimaryKeyColumns(i).Description,SourceTable.NonPrimaryKeyColumns(i).Name) %>:
+                    </td>
+                    <td>
+                        <asp:DropDownList ID="ddl<%= SourceTable.NonPrimaryKeyColumns(i).Name %>" runat="server" DataTextField="<%= SourceTable.NonPrimaryKeyColumns(i).Name.Replace("ID","Name") %>" DataValueField="<%= SourceTable.NonPrimaryKeyColumns(i).Name %>">
+                        </asp:DropDownList><%=iif(SourceTable.NonPrimaryKeyColumns(i).AllowDbNull=false,"&nbsp;<font color=""red"">(*)</font>","")%>
+                    </td>
+                </tr>
+                <% Else %>
+                <% Select Case SourceTable.NonPrimaryKeyColumns(i).DataType %>
+                <% Case DbType.Guid %> 
+                <% Case DbType.Date, DbType.DateTime  %>
+                  <tr>
+                    <td class="<%= Lcase(SourceTable.Name) %>-edit-1">
+                        &nbsp;</td>
+                    <td class="style6">
+                       <%= Iif(SourceTable.NonPrimaryKeyColumns(i).Description<>"",SourceTable.NonPrimaryKeyColumns(i).Description,SourceTable.NonPrimaryKeyColumns(i).Name) %>:
+                    </td>
+                    <td>
+                        <asp:TextBox ID="tx<%= SourceTable.NonPrimaryKeyColumns(i).Name %>" runat="server" width="70px"></asp:TextBox><%=iif(SourceTable.NonPrimaryKeyColumns(i).AllowDbNull=false,"&nbsp;<font color=""red"">(*)</font>","")%>
+                         <obout:Calendar ID="cal<%= SourceTable.NonPrimaryKeyColumns(i).Name %>" runat="server" Columns="1" CultureName="vi-VN" DatePickerImagePath="~/images/admin/button_Calendar.gif"
+                                                    DatePickerMode="true" StyleFolder="~/Styles/obCalendar/default"
+                                                    TextArrowLeft="?" TextArrowRight="?" TextBoxId="tx<%= SourceTable.NonPrimaryKeyColumns(i).Name %>">
+                                                </obout:Calendar>
+                    </td>
+                </tr> 
+                <% Case DbType.Boolean %>
+                  <tr>
+                    <td class="<%= Lcase(SourceTable.Name) %>-edit-1">
+                        &nbsp;</td>
+                    <td class="style6">
+                       <%= Iif(SourceTable.NonPrimaryKeyColumns(i).Description<>"",SourceTable.NonPrimaryKeyColumns(i).Description,SourceTable.NonPrimaryKeyColumns(i).Name) %>:
+                    </td>
+                    <td> 
+                        <asp:CheckBox ID="chk<%= SourceTable.NonPrimaryKeyColumns(i).Name %>" runat="server" />
+                    </td>
+                </tr>
+                
+                <% Case Else %> 
+                <tr>
+                    <td class="<%= Lcase(SourceTable.Name) %>-edit-1">
+                        &nbsp;</td>
+                    <td class="style6">
+                       <%= Iif(SourceTable.NonPrimaryKeyColumns(i).Description<>"",SourceTable.NonPrimaryKeyColumns(i).Description,SourceTable.NonPrimaryKeyColumns(i).Name) %>:
+                    </td>
+                    <td>
+                        <asp:TextBox ID="tx<%= SourceTable.NonPrimaryKeyColumns(i).Name %>" runat="server"></asp:TextBox><%=iif(SourceTable.NonPrimaryKeyColumns(i).AllowDbNull=false,"&nbsp;<font color=""red"">(*)</font>","")%>
+                    </td>
+                </tr> 
+                 <% End Select %> 
+                 <% End If %> 
+                 <% Next i %> 
+               
+                
+                <tr>
+                    <td class="<%= Lcase(SourceTable.Name) %>-edit-1">
+                        &nbsp;</td>
+                    <td class="style6">
+                        &nbsp;
+                    </td>
+                    <td>
+                        <asp:Button onclick="btnSave_Click" ID="btnSave" runat="server" Text="Lưu" Width="80px" />
+                        <asp:Button onclick="btnBack_Click" ID="btnBack" runat="server" Text="Quay lại" />
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+</asp:Content>
+ <script runat="template"> 
+
+</script>

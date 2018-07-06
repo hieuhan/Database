@@ -1,0 +1,672 @@
+﻿<%------------------------------------------------------------------------------------------
+*  Developer:   hieuht
+------------------------------------------------------------------------------------------%>
+<%@ CodeTemplate Src="Utilities.cst.vb" Inherits="Utilities" Encoding="UTF-8" Language="VB" Debug="True" TargetLanguage="VB"%>
+<%@ CodeTemplate Language="VB" TargetLanguage="VB" Description="Generates a very simple business object." %>
+<%@ Property Name="SourceTable" Type="SchemaExplorer.TableSchema" Category="Context" Description="Table that the object is based on." %>
+<%@ Property Name="SingleFileMode" Type="System.Boolean" Category="Options" Default="True" Description="Generate content for a complete cs file instead of just a class." %>
+<%@ Property Name="RootNamespace"  Type="System.String"  Default="ClassLibrary" Category="Options" %> 
+<%@ Property Name="ConnectionString" Type="System.String" Category="Options" Default="DefaultConnectionString" %>
+<%@ Property Name="ConnectionStringName" Type="System.String" Category="Options" Default="DefaultConnectionStringName" %>
+<%@ Assembly Name="SchemaExplorer" %>
+<%@ Assembly Name="System.Data" %>
+<%@ Import Namespace="SchemaExplorer" %>
+<%@ Import Namespace="System.Data" %>
+<%@ Map Name="DbDataReader" Src="DbType-DataReaderMethod" Description="DbType to DataReader Method Map" %>
+<%@ Map Name="SqlNativeSqlDb" Src="SqlNativeType-SqlDbType" Description="SqlNativeType to SqlDbType Map" %>
+
+<% If Me.SingleFileMode Then %>
+//-----------------------------------------------------------------------
+// <copyright file="<%= GetClassName(SourceTable) %>.cs">
+//     Author: hieuht
+//     CreateDate: <%=DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")%>
+// </copyright>
+//-----------------------------------------------------------------------
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Data.Common;
+namespace <%= Me.RootNamespace %>
+{
+<% End If %>
+<% Dim helper As TemplateHelper = TemplateHelper.Instance(SourceTable)%> 
+    public class <%= GetClassName(SourceTable) %>
+    {   
+    #region Private Properties
+    <% For Each column As RenderedColumn In helper.PrimaryColumns %>
+	    private <%=GetCType(column) %> _<%=column.Name%>;
+	<% Next %>
+    <% For Each column As RenderedColumn In helper.MemberColumns %>
+    <% 	if (Not column.Name.ToLower().Equals("name")) %>
+	    private <%=GetCType(column) %> _<%=column.Name%>;
+	<% End If %>
+	<% Next %>
+    <%For Each column As RenderedColumn In helper.ForeignColumns %> 
+	    private <%=GetCType(column) %> _<%=column.Name%>;
+	<% Next %>  
+        private DatabaseAccess db;
+        
+    #endregion
+    
+    #region Public Properties
+        
+        //-----------------------------------------------------------------
+		public <%=GetClassName(SourceTable)%>()
+        {
+            db = new DatabaseAccess();
+		}
+        //-----------------------------------------------------------------        
+        public <%=GetClassName(SourceTable)%>(string providerName , string connectionString)
+        {
+            db = new DatabaseAccess(providerName, connectionString);
+        }
+        //-----------------------------------------------------------------
+        ~<%=GetClassName(SourceTable)%>()
+        {
+
+		}
+        //-----------------------------------------------------------------
+		public virtual void Dispose()
+        {
+
+		}
+        //-----------------------------------------------------------------    
+   <% For Each column As RenderedColumn In helper.PrimaryColumns %>
+	    public <%=GetCType(column) %> <%=column.Name%>
+        {
+		    get
+            {
+		        return _<%=column.Name%>;
+	        }
+		    set
+            {
+			    _<%=column.Name%> = value;
+		    }
+	    }
+	<% Next %>
+    
+    <% For Each column As RenderedColumn In helper.MemberColumns %>
+		<% 	if (Not column.Name.ToLower().Equals("name")) %>
+        public <%=GetCType(column) %> <%=column.Name%>
+		{
+            get
+            {
+			    return _<%=column.Name%>;
+		    }
+		    set
+            {
+			    _<%=column.Name%> = value;
+            }
+		}    
+	<% End If %>
+	<% Next %>
+    
+    <%For Each column As RenderedColumn In helper.ForeignColumns %> 
+	    public <%=GetCType(column) %> <%=column.Name%>
+        {
+		    get 
+            {
+			    return _<%=column.Name %>;
+            }
+		    set
+            {
+			    _<%=column.Name%> = value;
+		    }
+	    }
+	<% Next %>
+    
+      
+    #endregion
+
+    #region Method
+        /// <summary>
+        /// Lấy danh sách đối tượng <%= GetClassName(SourceTable) %> từ DbDataReader
+        /// </summary>
+        /// <param name="cmd">DbCommand</param>
+        /// <returns>list</returns>
+        private List<<%= GetClassName(SourceTable) %>> Init(DbCommand cmd)
+        {
+            List<<%= GetClassName(SourceTable) %>> list<%= GetClassName(SourceTable) %> = new List<<%= GetClassName(SourceTable) %>>();
+            try
+            {
+                using (DbDataReader reader = db.ExecuteReader(cmd))
+                {
+                    while (reader.Read())
+                    {
+                        <%= GetClassName(SourceTable) %> m<%= GetClassName(SourceTable) %> = new <%= GetClassName(SourceTable) %>
+                        {
+                            <% For i As Integer = 0 To SourceTable.Columns.Count - 1 %> 
+                            <%= GetPropertyName(SourceTable.Columns(i)) %> = reader.ReadAs<<%= GetGenericType(SourceTable.Columns(i)) %>>("<%= GetPropertyName(SourceTable.Columns(i)) %>"),
+                            <% Next i %>
+                        };
+                        list<%= GetClassName(SourceTable) %>.Add(m<%= GetClassName(SourceTable) %>);
+                    }
+                }
+                return list<%= GetClassName(SourceTable) %>;
+            }
+            catch (Exception err)
+            {
+                throw new Exception("Data error: " + err.Message);
+            }
+        }
+        //-----------------------------------------------------------
+        /// <summary>
+        /// Thêm đối tượng <%= GetClassName(SourceTable) %>
+        /// </summary>
+        /// <param name="sysMessageId"></param>
+        /// <returns>sysMessageTypeId</returns>
+        public byte Insert(ref int sysMessageId)
+        {
+            byte retVal = 0;
+            try
+            {
+                retVal = InsertOrUpdate(ref sysMessageId);
+            }
+            catch (Exception ex)
+            {
+                throw ex;
+            }
+            return retVal;
+        }
+        //--------------------------------------------------------------
+        /// <summary>
+        /// Cập nhật đối tượng <%= GetClassName(SourceTable) %>
+        /// </summary>
+        /// <param name="sysMessageId"></param>
+        /// <returns>sysMessageTypeId</returns>
+        public byte Update(ref int sysMessageId)
+        {
+            byte retVal = 0;
+            try
+            {
+                retVal = InsertOrUpdate(ref sysMessageId);
+            }
+            catch (Exception ex)
+            {
+                throw ex;
+            }
+            return retVal;
+        }
+        //-----------------------------------------------------------
+        /// <summary>
+        /// Thêm/Sửa đối tượng <%= GetClassName(SourceTable) %>
+        /// </summary>
+        /// <param name="sysMessageId"></param>
+        /// <returns>sysMessageTypeId</returns>
+        public byte InsertOrUpdate(ref int sysMessageId)
+        {
+            byte retVal = 0;
+            try
+            {
+                DbCommand cmd = db.GetStoredProcCommand("<%= GetClassName(SourceTable) %>_InsertOrUpdate");
+                <% For i As Integer = 0 To SourceTable.NonPrimaryKeyColumns.Count - 1 %>  
+                <% If GetPropertyName(SourceTable.NonPrimaryKeyColumns(i)) <> "CrDateTime" AND GetPropertyName(SourceTable.NonPrimaryKeyColumns(i)) <> "LastUpdated" AND GetPropertyName(SourceTable.NonPrimaryKeyColumns(i)) <> "LastUpdatedUserId" Then %>
+                db.AddInParameter(cmd, "@<%= GetPropertyName(SourceTable.NonPrimaryKeyColumns(i)) %>", DbType.<%= GetDbType3(SourceTable.NonPrimaryKeyColumns(i)) %>, <%= GetPropertyName(SourceTable.NonPrimaryKeyColumns(i)) %>);
+                <% End If %>
+                <% Next i %>
+                db.AddInputOutputParameter(cmd, "@<%=SourceTable.PrimaryKey.MemberColumns(0).Name%>", DbType.<%= GetDbType3(SourceTable.PrimaryKey.MemberColumns(0)) %>, <%=SourceTable.PrimaryKey.MemberColumns(0).Name%>);
+                db.AddOutParameter(cmd, "@sysMessageId", DbType.Int32);
+                db.AddOutParameter(cmd, "@SysMessageTypeId", DbType.Byte);
+                db.ExecuteNonQuery(cmd);
+                <%=SourceTable.PrimaryKey.MemberColumns(0).Name%> = Convert.<%=GetDbType4(SourceTable.PrimaryKey.MemberColumns(0))%>(db.GetParameter(cmd, "@<%=SourceTable.PrimaryKey.MemberColumns(0).Name%>").Value == null ? "0" : db.GetParameter(cmd, "@<%=SourceTable.PrimaryKey.MemberColumns(0).Name%>").Value);
+                sysMessageId = Convert.ToInt16(db.GetParameter(cmd, "@sysMessageId").Value == null ? "0" : db.GetParameter(cmd, "@sysMessageId").Value);
+                retVal = Convert.ToByte(db.GetParameter(cmd, "@SysMessageTypeId").Value == null ? "0" : db.GetParameter(cmd, "@SysMessageTypeId").Value);              
+            }
+            catch (Exception ex)
+            {
+                throw ex;
+            }
+            return retVal;
+        }
+        //-------------------------------------------------------------- 
+        /// <summary>
+        /// Xóa đối tượng <%= GetClassName(SourceTable) %>
+        /// </summary>
+        /// <param name="sysMessageId">sysMessageId</param>
+        /// <returns>sysMessageTypeId</returns>
+        public byte Delete(ref int sysMessageId)
+        {
+            byte retVal = 0;
+            try
+            {
+                DbCommand cmd = db.GetStoredProcCommand("<%= GetClassName(SourceTable) %>_Delete");
+                db.AddInParameter(cmd, "@<%=SourceTable.PrimaryKey.MemberColumns(0).Name%>", DbType.<%= GetDbType3(SourceTable.PrimaryKey.MemberColumns(0)) %>, <%=SourceTable.PrimaryKey.MemberColumns(0).Name%>);
+                db.AddOutParameter(cmd, "@sysMessageId", DbType.Int32);
+                db.AddOutParameter(cmd, "@SysMessageTypeId", DbType.Byte);
+                db.ExecuteNonQuery(cmd);
+                sysMessageId = Convert.ToInt16(db.GetParameter(cmd, "@sysMessageId").Value == null ? "0" : db.GetParameter(cmd, "@sysMessageId").Value);
+                retVal = Convert.ToByte(db.GetParameter(cmd, "@SysMessageTypeId").Value == null ? "0" : db.GetParameter(cmd, "@SysMessageTypeId").Value);              
+            }
+            catch (Exception ex)
+            {
+                throw ex;
+            }
+            return retVal;
+        }
+        //--------------------------------------------------------------     
+        /// <summary>
+        /// Trả về đối tượng <%=GetClassName(SourceTable)%> theo điều kiện đầu vào
+        /// </summary>
+        /// <returns><%=GetClassName(SourceTable)%></returns>
+        public <%=GetClassName(SourceTable)%> Get()
+        {
+            <%=GetClassName(SourceTable)%> retVal = new <%=GetClassName(SourceTable)%>();
+            int rowCount = 0, pageSize = 20, pageNumber = 0;
+            string dateFrom = string.Empty, dateTo = string.Empty, orderBy = string.Empty;
+            try
+            {
+                List<<%= GetClassName(SourceTable) %>> list = GetPage(dateFrom, dateTo, orderBy, pageSize, pageNumber, ref rowCount);
+                if(list.Count>0) retVal = list[0];
+            }
+            catch (Exception ex)
+            {
+                throw ex;
+            }
+            return retVal;
+        }
+		
+      
+        //-------------------------------------------------------------- 
+        /// <summary>
+        /// Danh sách <%= GetClassName(SourceTable) %> phân trang theo điều kiện đầu vào
+        /// </summary>
+        /// <param name="dateFrom">Từ ngày</param>
+        /// <param name="dateTo">Đến ngày</param>
+        /// <param name="orderBy">Sắp xếp theo</param>
+        /// <param name="pageSize">Số records/trang</param>
+        /// <param name="pageNumber">Số trang</param>
+        /// <param name="rowCount">Tổng số records</param>
+        /// <returns>list<%= GetClassName(SourceTable) %></returns>
+        public List<<%= GetClassName(SourceTable) %>> GetPage(string dateFrom, string dateTo, string orderBy, int pageSize, int pageNumber, ref int rowCount)
+        {
+            try
+            {
+                DbCommand cmd = db.GetStoredProcCommand("<%= GetClassName(SourceTable) %>_GetPage");
+                db.AddInParameter(cmd, "@<%= GetPropertyName(SourceTable.PrimaryKey.MemberColumns(0)) %>", DbType.<%= GetDbType3(SourceTable.PrimaryKey.MemberColumns(0)) %>, <%= GetPropertyName(SourceTable.PrimaryKey.MemberColumns(0)) %>);
+                <% For i As Integer = 0 To SourceTable.NonPrimaryKeyColumns.Count - 1 %>
+                <% If SourceTable.NonPrimaryKeyColumns(i).DataType = DbType.Date Or SourceTable.NonPrimaryKeyColumns(i).DataType = DbType.Time Or SourceTable.NonPrimaryKeyColumns(i).DataType = DbType.DateTime Or SourceTable.NonPrimaryKeyColumns(i).DataType = DbType.DateTime2 %>
+                <% Continue For %>
+                <% End If %>
+                <% If GetPropertyName(SourceTable.NonPrimaryKeyColumns(i)) <> "CrDateTime" AND GetPropertyName(SourceTable.NonPrimaryKeyColumns(i)) <> "LastUpdated"  Then %>
+                db.AddInParameter(cmd, "@<%= GetPropertyName(SourceTable.NonPrimaryKeyColumns(i)) %>", DbType.<%= GetDbType3(SourceTable.NonPrimaryKeyColumns(i)) %>, <%= GetPropertyName(SourceTable.NonPrimaryKeyColumns(i)) %>);
+                <% End If %>   
+                <% Next i %>   
+                db.AddInParameter(cmd, "@DateFrom", DbType.String, dateFrom);
+                db.AddInParameter(cmd, "@DateTo", DbType.String, dateTo);
+                db.AddInParameter(cmd, "@OrderBy", DbType.String, orderBy);
+                db.AddInParameter(cmd, "@PageSize", DbType.Int32, pageSize);
+                db.AddInParameter(cmd, "@PageNumber", DbType.Int32, pageNumber);
+                db.AddOutParameter(cmd, "@RowCount", DbType.Int32);
+                List<<%= GetClassName(SourceTable) %>> list<%= GetClassName(SourceTable) %> = Init(cmd);
+                rowCount = Convert.ToInt32(db.GetParameter(cmd, "@RowCount").Value == null ? "0" : db.GetParameter(cmd, "@RowCount").Value);
+                return list<%= GetClassName(SourceTable) %>;
+            }
+            catch (Exception ex)
+            {
+                throw ex;
+            }  
+        }
+        
+        //--------------------------------------------------------------
+        /// <summary>
+        /// Trả về <%= SourceTable.PrimaryKey.MemberColumns(0).Name.Replace("Id","") %>Name theo <%=LowercaseFirstLetter(SourceTable.PrimaryKey.MemberColumns(0).Name)%>
+        /// </summary>
+        /// <param name="<%=LowercaseFirstLetter(SourceTable.PrimaryKey.MemberColumns(0).Name)%>"></param>
+        /// <returns><%= SourceTable.PrimaryKey.MemberColumns(0).Name.Replace("Id","") %>Name</returns>
+        public static string Static_Get<%= SourceTable.PrimaryKey.MemberColumns(0).Name.Replace("Id","") %>Name(<%=GetCType2(SourceTable.PrimaryKey.MemberColumns(0)).ToLower() %> <%=LowercaseFirstLetter(SourceTable.PrimaryKey.MemberColumns(0).Name)%>)
+        {
+            <%= GetClassName(SourceTable) %> m<%= GetClassName(SourceTable) %> = new <%= GetClassName(SourceTable) %>
+            {
+                <%=SourceTable.PrimaryKey.MemberColumns(0).Name%> = <%=LowercaseFirstLetter(SourceTable.PrimaryKey.MemberColumns(0).Name)%>
+            }.Get();
+            return m<%= GetClassName(SourceTable) %>.<%= SourceTable.PrimaryKey.MemberColumns(0).Name.Replace("Id","") %>Name;
+        }
+        
+    #endregion
+    } 
+<% If Me.SingleFileMode Then %>
+}
+<% End If %>
+
+<script runat="template">
+
+Public Function GetMemberVariableDeclarationStatement(ByVal column As ColumnSchema) As String
+	Return GetMemberVariableDeclarationStatement("Private", column)
+End Function
+
+Public Function GetMemberVariableDeclarationStatement(ByVal protectionLevel As String, ByVal column As ColumnSchema) As String
+	Dim statement As String = protectionLevel + " Dim "
+	statement += GetMemberVariableName(column) + " As " + column.SystemType.ToString()
+
+	Dim defaultValue As String = GetMemberVariableDefaultValue(column)
+	If defaultValue <> "" Then
+		statement += " = " + defaultValue
+	End If
+
+	Return statement
+End Function
+
+Public Function GetCamelCaseName(ByVal value As String) As String
+	Return value.Substring(0, 1).ToLower() + value.Substring(1) 
+End Function
+
+Public Function GetMemberVariableName(ByVal column As ColumnSchema) As String
+	Dim propertyName As String = GetPropertyName(column)
+	Dim memberVariableName As String = "_" + GetCamelCaseName(propertyName)
+
+	Return memberVariableName
+End Function
+
+Public Function GetPropertyName(ByVal column As ColumnSchema) As String
+	Dim propertyName As String = column.Name
+
+	'If propertyName = column.Table.Name + "Name" Then
+	'	Return "Name"
+	'End If
+	'If propertyName = column.Table.Name + "Description" Then
+	'	Return "Description"
+	'End If
+
+	If propertyName.EndsWith("TypeCode") Then
+		propertyName = propertyName.Substring(0, propertyName.Length - 4)
+	End If
+
+	Return propertyName
+End Function
+
+Public Function GetMemberVariableDefaultValue(ByVal column As ColumnSchema) As String
+	Select Case column.DataType
+		Case DbType.Guid
+			Return "Guid.Empty"
+		Case DbType.AnsiString, DbType.AnsiStringFixedLength, DbType.[String], DbType.StringFixedLength 
+			Return "String.Empty"
+		Case Else
+			Return ""
+	End Select
+End Function
+
+Public Function GetReaderMethod(ByVal column As ColumnSchema) As String
+	Return DbDataReader(column.DataType.ToString())
+End Function
+
+Public Function GetClassName(ByVal table As TableSchema) As String
+	'If table.Name.EndsWith("s") Then
+		'Return table.Name.Substring(0, table.Name.Length - 1)
+	'Else
+		Return table.Name
+	'End If
+End Function
+
+Public Function GetSqlDbType(ByVal column As ColumnSchema) As String
+	Return SqlNativeSqlDb(column.NativeType.ToString())
+End Function
+
+Public Function GeneratePrimaryParameters(ByVal table As TableSchema) As String 
+    if table.HasPrimaryKey  then
+       return "ByVal " & table.PrimaryKey.MemberColumns(0).Name & " As " & GetDbType(table.PrimaryKey.MemberColumns(0)) 
+    end if  
+End Function
+
+Public Function GenerateParameters(ByVal table As TableSchema) As String
+	dim reval as string=""
+    
+    if table.HasPrimaryKey  then
+        reval="ByVal " & table.PrimaryKey.MemberColumns(0).Name & " As " & GetDbType(table.PrimaryKey.MemberColumns(0)) & ","
+    end if 
+    
+    For i As Integer = 0 To table.NonPrimaryKeyColumns.Count - 1
+     reval = reval & "ByVal " &  GetPropertyName(table.NonPrimaryKeyColumns(i)) & " As " &  GetDbType(table.NonPrimaryKeyColumns(i)) & ","
+    Next i
+    
+    If len(reval)>0
+        reval=left(reval,len(reval)-1)
+    end if
+    
+    return reval
+End Function 
+
+Public Function GetDbType(ByVal column As ColumnSchema) As String 
+    return GetParameterSystemType(column) 
+End Function
+
+Public Function GetDbType2(ByVal column As ColumnSchema) As String  
+    Dim reVal as string=""
+    select case LCase(SqlNativeSqlDb(column.NativeType.ToString()))
+        case "decimal"
+            reVal = "Decimal"
+        case "float"
+             reVal = "Decimal"
+        case "int"
+             reVal = "Int32"
+        case "bigint"
+             reVal = "Int64"
+        case "bit"
+             reVal = "Boolean"
+        case "char"
+             reVal = "String"
+        case "nvarchar"
+             reVal = "String"
+        case "varchar"
+             reVal = "String"
+        case "ntext"
+             reVal = "String"
+        case "numeric"
+             reVal = "Decimal"
+        case "nchar"
+             reVal = "String"
+        case "tinyint"
+             reVal = "Int16"
+        case "tinyint"
+             reVal = "Byte"
+        case "uniqueidentifier" 
+             reVal = "String" 
+    end select 
+    return  reVal 
+End Function
+Public Function GetCType(ByVal column As RenderedColumn) As String  
+    Dim reVal as string=""
+	reVal=column.SystemType.tolower()
+    select case reVal
+        case "int32"
+             reVal = "int"
+        case "int64"
+             reVal = "long"
+        case "bit"
+             reVal = "bool"
+        case "numeric"
+             reVal = "decimal"        
+		case "int16"
+             reVal = "short"
+        case "tinyint"
+             reVal = "byte"
+        case "datetime"
+             reVal = "DateTime"
+        case "uniqueidentifier" 
+             reVal = "string" 
+    end select 
+    return reVal' column.SystemType.tolower()
+End Function
+Public Function GetCType2(ByVal column As ColumnSchema) As String  
+   Dim reVal as string=""
+	reVal=  LCase(SqlNativeSqlDb(column.NativeType.ToString()))
+    select case LCase(SqlNativeSqlDb(column.NativeType.ToString()))
+        case "float"
+             reVal = "decimal"
+        case "bigint"
+             reVal = "long"
+        case "bit"
+             reVal = "bool"
+        case "char"
+             reVal = "string"
+        case "nvarchar"
+             reVal = "string"
+        case "varchar"
+             reVal = "string"
+        case "ntext"
+             reVal = "string"
+        case "numeric"
+             reVal = "decimal"
+        case "nchar"
+             reVal = "string"			
+		case "smallint"
+             reVal = "short"
+        case "tinyint"
+             reVal = "byte"
+        case "datetime"
+             reVal = "DateTime"
+        case "uniqueidentifier" 
+             reVal = "string" 
+    end select 
+    return  reVal 
+End Function
+Public Function GetGenericType(ByVal column As ColumnSchema) As String  
+   Dim reVal as string=""
+	reVal=  LCase(SqlNativeSqlDb(column.NativeType.ToString()))
+    select case LCase(SqlNativeSqlDb(column.NativeType.ToString()))
+        case "float"
+             reVal = "decimal"
+        case "bigint"
+             reVal = "long"
+        case "bit"
+             reVal = "bool"
+        case "char"
+             reVal = "string"
+        case "nvarchar"
+             reVal = "string"
+        case "varchar"
+             reVal = "string"
+        case "ntext"
+             reVal = "string"
+        case "numeric"
+             reVal = "decimal"
+        case "nchar"
+             reVal = "string"			
+		case "smallint"
+             reVal = "short"
+        case "tinyint"
+             reVal = "byte"
+        case "datetime"
+             reVal = "DateTime"
+        case "uniqueidentifier" 
+             reVal = "string" 
+    end select 
+    return  reVal 
+End Function
+Public Function GetDbType3(ByVal column As ColumnSchema) As String  
+    Dim reVal as string=""
+    select case LCase(SqlNativeSqlDb(column.NativeType.ToString()))
+        case "decimal"
+            reVal = "Decimal"
+        case "float"
+             reVal = "Float"
+        case "int"
+             reVal = "Int32"
+        case "bigint"
+             reVal = "Int64"
+        case "bit"
+             reVal = "Boolean"
+        case "char"
+             reVal = "String"
+        case "nvarchar"
+             reVal = "String"
+        case "varchar"
+             reVal = "String"
+        case "ntext"
+             reVal = "String"
+        case "numeric"
+             reVal = "Decimal"
+        case "nchar"
+             reVal = "String"			
+		case "smallint"
+             reVal = "Int16"
+        case "tinyint"
+             reVal = "Byte"
+        case "datetime"
+             reVal = "DateTime"
+        case "uniqueidentifier" 
+             reVal = "String" 
+    end select 
+    return  reVal 
+End Function
+Public Function GetDbType4(ByVal column As ColumnSchema) As String  
+    Dim reVal as string=""
+    select case LCase(SqlNativeSqlDb(column.NativeType.ToString()))
+        case "decimal"
+            reVal = "ToDecimal"
+        case "float"
+             reVal = "ToFloat"
+        case "int"
+             reVal = "ToInt32"
+        case "bigint"
+             reVal = "ToInt64"
+        case "bit"
+             reVal = "ToBoolean"
+        case "char"
+             reVal = "ToString"
+        case "nvarchar"
+             reVal = "ToString"
+        case "varchar"
+             reVal = "ToString"
+        case "ntext"
+             reVal = "ToString"
+        case "numeric"
+             reVal = "ToDecimal"
+        case "nchar"
+             reVal = "ToString"			
+		case "smallint"
+             reVal = "ToInt16"
+        case "tinyint"
+             reVal = "ToByte"
+        case "datetime"
+             reVal = "ToDateTime"
+        case "uniqueidentifier" 
+             reVal = "ToString" 
+    end select 
+    return  reVal 
+End Function
+
+Public Function LowercaseFirstLetter(ByVal val As String) As String
+        If String.IsNullOrEmpty(val) Then
+            Return val
+        End If
+
+        ' Convert to character array.
+        Dim array() As Char = val.ToCharArray
+
+        ' Uppercase first character.
+        array(0) = Char.ToLower(array(0))
+
+        ' Return new string.
+        Return New String(array)
+End Function
+
+Public Function GetParameterSystemType(ByVal column As ColumnSchema) As String
+    'return replace(column.SystemType.ToString,"System.","") 
+    dim reVal as string = replace(column.SystemType.ToString,"System.","")
+    
+    'if lcase(reVal)="datetime" then
+    '    return "String"
+    'else
+    '    return reval
+    'end if
+    return reVal
+    
+End Function
+
+Public Function GetPrimaryKeyType(ByVal table As TableSchema) As String
+	If Not IsNothing(table.PrimaryKey) Then
+		If table.PrimaryKey.MemberColumns.Count = 1 Then
+			Return table.PrimaryKey.MemberColumns(0).SystemType.ToString()
+		Else
+			Throw New ApplicationException("This template will not work on primary keys with more than one member column.")
+		End If
+	Else
+		Throw New ApplicationException("This template will only work on tables with a primary key.")
+	End If
+End Function
+
+Public Overloads Overrides Function GetFileName() As String
+	Return Me.GetClassName(Me.SourceTable) + ".cs"
+End Function
+
+</script>

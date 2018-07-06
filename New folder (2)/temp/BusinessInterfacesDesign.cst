@@ -1,0 +1,49 @@
+﻿<%------------------------------------------------------------------------------------------
+*  Developer:   huyht
+------------------------------------------------------------------------------------------%>
+<%@ CodeTemplate Language="VB" TargetLanguage="VB" Encoding="UTF-8" Description="Generates a very simple business object." %>
+<%@ Property Name="SourceTable" Type="SchemaExplorer.TableSchema" Category="Context" Description="Table that the object is based on." %> 
+<%@ Property Name="RootNamespace"  Type="System.String"  Default="" Category="Options" %> 
+<%@ Property Name="TablePrefix"  Type="System.String"  Default="" Category="Options" %>
+<%@ Assembly Name="SchemaExplorer" %>
+<%@ Assembly Name="System.Data" %>
+<%@ Import Namespace="SchemaExplorer" %>
+<%@ Import Namespace="System.Data" %>
+<%@ Map Name="DbDataReader" Src="DbType-DataReaderMethod" Description="DbType to DataReader Method Map" %>
+<%@ Map Name="SqlNativeSqlDb" Src="SqlNativeType-SqlDbType" Description="SqlNativeType to SqlDbType Map" %> 
+Option Strict On
+Option Explicit On
+Namespace <%= RootNamespace %> 
+    Partial Public Class <%= SourceTable.Name %><%= Me.TablePrefix %>
+        Protected WithEvents tblView As Global.System.Web.UI.HtmlControls.HtmlTable
+        Protected WithEvents tblEdit As Global.System.Web.UI.HtmlControls.HtmlTable
+        Protected WithEvents lnbAddNew As Global.System.Web.UI.WebControls.LinkButton
+        Protected WithEvents lnbReview As Global.System.Web.UI.WebControls.LinkButton
+        Protected WithEvents lnbDel As Global.System.Web.UI.WebControls.LinkButton
+        Protected WithEvents DgItem As Global.System.Web.UI.WebControls.DataGrid 
+        Protected WithEvents btnSave As Global.System.Web.UI.WebControls.Button 
+        Protected WithEvents btnBack As Global.System.Web.UI.WebControls.Button
+        Protected WithEvents ddlAction As Global.System.Web.UI.WebControls.DropDownList
+        Protected WithEvents ddlOrderBy As Global.System.Web.UI.WebControls.DropDownList
+        Protected WithEvents btnSearch As Global.System.Web.UI.WebControls.Button
+        Protected WithEvents lbTotalRecord As Global.System.Web.UI.WebControls.Label
+        Protected WithEvents txtSearch As Global.System.Web.UI.WebControls.TextBox
+        <% For i As Integer = 0 To SourceTable.NonPrimaryKeyColumns.Count - 1 %> 
+            <% If SourceTable.NonPrimaryKeyColumns(i).IsForeignKeyMember Then %>
+        Protected WithEvents ddl<%= SourceTable.NonPrimaryKeyColumns(i).Name %> As Global.System.Web.UI.WebControls.DropDownList
+        Protected WithEvents ddl<%= SourceTable.NonPrimaryKeyColumns(i).Name %>_S As Global.System.Web.UI.WebControls.DropDownList
+            <% Else %>
+                <% Select Case SourceTable.NonPrimaryKeyColumns(i).DataType %>
+                <% Case DbType.Guid %> 
+                <% Case DbType.Date, DbType.DateTime  %>
+        Protected WithEvents tx<%= SourceTable.NonPrimaryKeyColumns(i).Name %> As Global.System.Web.UI.WebControls.TextBox
+        Protected WithEvents cal<%= SourceTable.NonPrimaryKeyColumns(i).Name %> As Global.OboutInc.Calendar2.Calendar 
+                <% Case DbType.Boolean %>
+        Protected WithEvents chk<%= SourceTable.NonPrimaryKeyColumns(i).Name %> As Global.System.Web.UI.WebControls.CheckBox 
+                <% Case Else %> 
+        Protected WithEvents tx<%= SourceTable.NonPrimaryKeyColumns(i).Name %> As Global.System.Web.UI.WebControls.TextBox
+                 <% End Select %> 
+            <% End If %> 
+        <% Next i %>  
+    End Class
+End Namespace 

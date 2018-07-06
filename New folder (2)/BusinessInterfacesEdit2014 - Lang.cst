@@ -1,0 +1,108 @@
+﻿<%------------------------------------------------------------------------------------------
+*  Developer:   huyht
+------------------------------------------------------------------------------------------%>
+<%@ CodeTemplate Language="VB" TargetLanguage="VB" Encoding="UTF-8" Description="Generates a very simple business object." %>
+<%@ Property Name="SourceTable" Type="SchemaExplorer.TableSchema" Category="Context" Description="Table that the object is based on." %>
+<%@ Property Name="RootNamespace"  Type="System.String"  Default="" Category="Options" %> 
+<%@ Property Name="TablePrefix"  Type="System.String"  Default="" Category="Options" %>
+<%@ Assembly Name="SchemaExplorer" %>
+<%@ Assembly Name="System.Data" %>
+<%@ Import Namespace="SchemaExplorer" %>
+<%@ Import Namespace="System.Data" %>
+<%@ Map Name="DbDataReader" Src="DbType-DataReaderMethod" Description="DbType to DataReader Method Map" %>
+<%@ Map Name="SqlNativeSqlDb" Src="SqlNativeType-SqlDbType" Description="SqlNativeType to SqlDbType Map" %> 
+<%%@ Page Language="C#" MasterPageFile="~/admin/MasterPageAdminEdit.master" AutoEventWireup="true" CodeFile="<%= SourceTable.Name %><%= Me.TablePrefix %>Edit.aspx.cs" Inherits="admin_pages_<%= SourceTable.Name %>Edit" Title="" %%>
+<asp:Content ID="contentAccountType" runat="server" ContentPlaceHolderID="m_contentBody">   
+    <table cellpadding="3" cellspacing="0" style="width:100%; font-weight:lighter" >
+        <tr>
+            <td>
+                &nbsp;
+            </td>
+            <td>
+                <asp:Label ID="lblLanguage" runat="server" Text="Ngôn ngữ:" meta:resourcekey="lblLanguage"></asp:Label>
+            </td>
+            <td>
+                <asp:DropDownList ID="ddlLanguage" runat="server" DataTextField="LanguageDesc" 
+                    DataValueField="LanguageId" Width="128px" 
+                    AutoPostBack="True" onselectedindexchanged="ddlLanguage_SelectedIndexChanged">
+                </asp:DropDownList>
+                &nbsp;&nbsp;
+                <asp:Label ID="lblAppType" runat="server" Text="Loại ứng dụng:" meta:resourcekey="lblAppType"></asp:Label>
+                &nbsp;&nbsp;
+                <asp:DropDownList ID="ddlAppType" runat="server" 
+                    DataTextField="ApplicationTypeDesc" DataValueField="ApplicationTypeId" 
+                    Width="120px" AutoPostBack="True" 
+                    onselectedindexchanged="ddlAppType_SelectedIndexChanged">
+                </asp:DropDownList>
+            </td>
+        </tr>
+         <% For i As Integer = 0 To SourceTable.NonPrimaryKeyColumns.Count - 1 
+                If SourceTable.Columns(i).Name = "CrDateTime" OR SourceTable.Columns(i).Name = "LastUpdated" OR SourceTable.Columns(i).Name = "CrUserId" OR SourceTable.Columns(i).Name = "LastUpdatedUserId" Then
+                    Continue For
+                End If
+        %> 
+         <% If SourceTable.NonPrimaryKeyColumns(i).IsForeignKeyMember Then %>
+         <tr>
+            <td>
+                &nbsp;</td>
+            <td>
+               <%= Iif(SourceTable.NonPrimaryKeyColumns(i).Description<>"",SourceTable.NonPrimaryKeyColumns(i).Description,SourceTable.NonPrimaryKeyColumns(i).Name) %>:
+            </td>
+            <td>
+                <asp:DropDownList ID="ddl<%= SourceTable.NonPrimaryKeyColumns(i).Name %>" runat="server" DataTextField="<%= SourceTable.NonPrimaryKeyColumns(i).Name.Replace("Id","Name") %>" DataValueField="<%= SourceTable.NonPrimaryKeyColumns(i).Name %>">
+                </asp:DropDownList><%=iif(SourceTable.NonPrimaryKeyColumns(i).AllowDbNull=false,"&nbsp;<font color=""red"">(*)</font>","")%>
+            </td>
+        </tr>
+        <% Else %>
+        <% Select Case SourceTable.NonPrimaryKeyColumns(i).DataType %>
+        <% Case DbType.Guid %> 
+        <% Case DbType.Date, DbType.DateTime  %>
+          <tr>
+            <td>
+                &nbsp;</td>
+            <td>
+               <%= Iif(SourceTable.NonPrimaryKeyColumns(i).Description<>"",SourceTable.NonPrimaryKeyColumns(i).Description,SourceTable.NonPrimaryKeyColumns(i).Name) %>:
+            </td>
+            <td>
+                <asp:TextBox CssClass= "tbdatepicker" ID="tx<%= SourceTable.NonPrimaryKeyColumns(i).Name %>" runat="server" width="70px"></asp:TextBox><%=iif(SourceTable.NonPrimaryKeyColumns(i).AllowDbNull=false,"&nbsp;<font color=""red"">(*)</font>","")%>                 
+            </td>
+        </tr> 
+        <% Case DbType.Boolean %>
+          <tr>
+            <td>
+                &nbsp;</td>
+            <td>
+               <%= Iif(SourceTable.NonPrimaryKeyColumns(i).Description<>"",SourceTable.NonPrimaryKeyColumns(i).Description,SourceTable.NonPrimaryKeyColumns(i).Name) %>:
+            </td>
+            <td> 
+                <asp:CheckBox ID="chk<%= SourceTable.NonPrimaryKeyColumns(i).Name %>" runat="server" />
+            </td>
+        </tr>
+        
+        <% Case Else %> 
+        <tr>
+            <td>
+                &nbsp;</td>
+            <td>
+               <%= Iif(SourceTable.NonPrimaryKeyColumns(i).Description<>"",SourceTable.NonPrimaryKeyColumns(i).Description,SourceTable.NonPrimaryKeyColumns(i).Name) %>
+               <%=iif(SourceTable.NonPrimaryKeyColumns(i).AllowDbNull=false,"&nbsp;<span style=""color:red"">(*)</span>","")%>:
+            </td>
+            <td>
+                <asp:TextBox ID="tx<%= SourceTable.NonPrimaryKeyColumns(i).Name %>" runat="server" CssClass="tukhoatimekiem" Width="90%" ></asp:TextBox>
+            </td>
+        </tr> 
+         <% End Select %> 
+         <% End If %> 
+         <% Next i %> 
+       
+    </table>
+    <div style="text-align:center; padding: 20px">
+        <asp:LinkButton ID="btnSave" runat="server" CssClass="savebutom"  Text="Lưu thông tin" meta:resourcekey="btnSave" 
+            onclick="btnSave_Click">
+        </asp:LinkButton>
+    </div>
+</asp:Content>
+
+ <script runat="template"> 
+
+</script>

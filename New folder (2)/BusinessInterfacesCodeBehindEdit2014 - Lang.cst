@@ -1,0 +1,236 @@
+﻿<%------------------------------------------------------------------------------------------
+*  Developer:   huyht
+------------------------------------------------------------------------------------------%>
+<%@ CodeTemplate Language="VB" TargetLanguage="VB" Encoding="UTF-8" Description="Generates a very simple business object." %>
+<%@ Property Name="SourceTable" Type="SchemaExplorer.TableSchema" Category="Context" Description="Table that the object is based on." %> 
+<%@ Property Name="RootNamespace"  Type="System.String"  Default="" Category="Options" %> 
+<%@ Property Name="TablePrefix"  Type="System.String"  Default="" Category="Options" %>
+<%@ Assembly Name="SchemaExplorer" %>
+<%@ Assembly Name="System.Data" %>
+<%@ Import Namespace="SchemaExplorer" %>
+<%@ Import Namespace="System.Data" %>
+<%@ Map Name="DbDataReader" Src="DbType-DataReaderMethod" Description="DbType to DataReader Method Map" %>
+<%@ Map Name="SqlNativeSqlDb" Src="SqlNativeType-SqlDbType" Description="SqlNativeType to SqlDbType Map" %> 
+
+/* ********************************************************************************
+'     Document    :  <%= Me.TablePrefix %><%= SourceTable.Name %>Edit.aspx.cs
+' ********************************************************************************/
+using System;
+using System.Data;
+using System.Configuration;
+using System.Collections;
+using System.Collections.Generic;
+using System.Web;
+using System.Web.Security;
+using System.Web.UI;
+using System.Web.UI.WebControls;
+using System.Web.UI.WebControls.WebParts;
+using System.Web.UI.HtmlControls;
+using System.Text;
+using System.Reflection;
+using System.IO;
+using ICSoft.CMSLib;
+using ICSoft.HelperLib;
+using sms.admin.security;
+public partial class admin_pages_<%= SourceTable.Name %>Edit : System.Web.UI.Page
+{		
+	private byte LanguageId = 0;
+    private byte ApplicationTypeId = 0;
+    private int ActUserId = 0;
+    protected void Page_Load(object sender, EventArgs e)
+	{
+        
+		try
+        {
+            ActUserId = SessionHelpers.GetUserId();
+            if (!IsPostBack)
+            {
+                if (Request.Params["LanguageId"] != null && Request.Params["LanguageId"].ToString() != "")
+                {
+                    LanguageId = byte.Parse(Request.Params["LanguageId"].ToString());
+                }
+                if (Request.Params["AppTypeId"] != null && Request.Params["AppTypeId"].ToString() != "")
+                {
+                    ApplicationTypeId = byte.Parse(Request.Params["AppTypeId"].ToString());
+                }
+                DropDownListHelpers.DDLLanguage_BindByCulture(ddlLanguage, Languages.Static_GetList(), "", LanguageId.ToString());
+                DropDownListHelpers.DDLAppType_BindByCulture(ddlAppType, ApplicationTypes.Static_GetList(), "", ApplicationTypeId.ToString());
+                if(Request.QueryString["id"] == null)
+                {                    
+                <% For i As Integer = 0 To SourceTable.NonPrimaryKeyColumns.Count - 1 %>
+                <% If SourceTable.NonPrimaryKeyColumns(i).IsForeignKeyMember Then %>
+                    DropDownListHelpers.DDL<%= SourceTable.ForeignKeyColumns(i).Name.Replace("Id","") %>_BindByCulture(ddl<%= SourceTable.ForeignKeyColumns(i).Name %>, <%= SourceTable.NonPrimaryKeyColumns(i).Name.Replace("Id","s") %>.Static_GetList(),  " ... ", "0");
+                <% Else If SourceTable.NonPrimaryKeyColumns(i).Description.EndsWith("(FK)") Then %>
+                    DropDownListHelpers.DDL<%= SourceTable.ForeignKeyColumns(i).Name.Replace("Id","") %>_BindByCulture(ddl<%= SourceTable.ForeignKeyColumns(i).Name %>, <%= SourceTable.NonPrimaryKeyColumns(i).Name.Replace("Id","s") %>.Static_GetList(),  " ... ", "0");
+                <% End if %>
+                <% Next i %>  
+                }
+                else
+                    bindData();
+            }
+        }
+        catch (Exception ex)
+        {
+        	sms.utils.LogFiles.LogError(((new System.Diagnostics.StackTrace()).GetFrames()[0]).GetMethod().Name + "\t" + ex.ToString());
+			JSAlertHelpers.Alert(ex.Message, this);
+        }		
+    }
+    //--------------------------------------------------------------------------------
+    
+    private void bindData()
+        {    
+            <%= SourceTable.PrimaryKey.MemberColumns(0).SystemType %> EditId;
+            if(Request.QueryString["id"] == null)
+            {
+                return;
+            }
+            else
+            {
+                EditId = <%= SourceTable.PrimaryKey.MemberColumns(0).SystemType %>.Parse(Request.QueryString["id"].ToString());
+                <%= SourceTable.Name %> m_<%= SourceTable.Name %> = new <%= SourceTable.Name %>();
+                m_<%= SourceTable.Name %>.<%= SourceTable.PrimaryKey.MemberColumns(0).Name %> = EditId;
+                m_<%= SourceTable.Name %>.LanguageId = byte.Parse(ddlLanguage.SelectedValue);
+                m_<%= SourceTable.Name %>.ApplicationTypeId = byte.Parse(ddlAppType.SelectedValue);
+                m_<%= SourceTable.Name %>=m_<%= SourceTable.Name %>.Get();
+                if (m_<%= SourceTable.Name %>.<%= SourceTable.PrimaryKey.MemberColumns(0).Name %> == 0)
+                {
+                    m_<%= SourceTable.Name %>.<%= SourceTable.PrimaryKey.MemberColumns(0).Name %> = EditId;
+                    m_<%= SourceTable.Name %>.LanguageId = 0;
+                    m_<%= SourceTable.Name %>.ApplicationTypeId = 0;
+                    m_<%= SourceTable.Name %> = m_<%= SourceTable.Name %>.Get();
+                    JSAlertHelpers.ShowNotify("8", "", GetGlobalResourceObject("AdminResource", "NoteBindDefault").ToString(), this);
+
+                }
+                <% For i As Integer = 0 To SourceTable.NonPrimaryKeyColumns.Count - 1 
+                    If SourceTable.Columns(i).Name = "CrDateTime" OR SourceTable.Columns(i).Name = "LastUpdated" OR SourceTable.Columns(i).Name = "CrUserId" OR SourceTable.Columns(i).Name = "LastUpdatedUserId" Then
+                        Continue For
+                    End If
+                %>  
+                <% If SourceTable.NonPrimaryKeyColumns(i).IsForeignKeyMember Or SourceTable.NonPrimaryKeyColumns(i).Description.EndsWith("(FK)") Then %>
+                    DropDownListHelpers.DDL<%= SourceTable.ForeignKeyColumns(i).Name.Replace("Id","") %>_BindByCulture(ddl<%= SourceTable.ForeignKeyColumns(i).Name %>, <%= SourceTable.NonPrimaryKeyColumns(i).Name.Replace("Id","s") %>.Static_GetList(),  " ... ", m_<%= SourceTable.Name %>.<%= SourceTable.NonPrimaryKeyColumns(i).Name %>.ToString());
+                <% Else %> 
+                    <% Select Case SourceTable.NonPrimaryKeyColumns(i).DataType %>
+                    <% Case DbType.Guid %> 
+                    <% Case DbType.Date, DbType.DateTime  %>  
+                tx<%= SourceTable.NonPrimaryKeyColumns(i).Name %>.Text = m_<%= SourceTable.Name %>.<%= SourceTable.NonPrimaryKeyColumns(i).Name %>.ToString("dd/MM/yyyy");
+                    <% Case DbType.Boolean %>
+                chk<%= SourceTable.NonPrimaryKeyColumns(i).Name %>.Checked = m_<%= SourceTable.Name %>.<%= SourceTable.NonPrimaryKeyColumns(i).Name %>;
+                    <% Case DbType.Byte,DbType.Int16,DbType.Int32,DbType.Int64 %>
+                tx<%= SourceTable.NonPrimaryKeyColumns(i).Name %>.Text = m_<%= SourceTable.Name %>.<%= SourceTable.NonPrimaryKeyColumns(i).Name %>.ToString();
+                    <% Case Else %> 
+                tx<%= SourceTable.NonPrimaryKeyColumns(i).Name %>.Text = m_<%= SourceTable.Name %>.<%= SourceTable.NonPrimaryKeyColumns(i).Name %>.ToString();
+                    <% End Select %> 
+                        <% End If %>
+                <% Next i %>
+            }
+    }
+    protected void ddlLanguage_SelectedIndexChanged(object sender, EventArgs e)
+    {
+        bindData();
+    }
+    protected void ddlAppType_SelectedIndexChanged(object sender, EventArgs e)
+    {
+        bindData();
+    }
+    protected void btnSave_Click(object sender, System.EventArgs e)
+	{
+		byte SysMessageTypeId = 0;
+        int SysMessageId = 0;
+        <%= SourceTable.PrimaryKey.MemberColumns(0).SystemType %> EditId;
+        <%= SourceTable.Name %> m_<%= SourceTable.Name %> = new <%= SourceTable.Name %>(); 
+        if(Request.QueryString["id"] == null)
+        {
+            EditId = 0;
+        }
+        else
+        {
+            EditId = <%= SourceTable.PrimaryKey.MemberColumns(0).SystemType %>.Parse(Request.QueryString["id"].ToString());
+            m_<%= SourceTable.Name %>.<%= SourceTable.PrimaryKey.MemberColumns(0).Name %> = EditId;
+            m_<%= SourceTable.Name %>.LanguageId = byte.Parse(ddlLanguage.SelectedValue);
+            m_<%= SourceTable.Name %>.ApplicationTypeId = byte.Parse(ddlAppType.SelectedValue);
+            m_<%= SourceTable.Name %> = m_<%= SourceTable.Name %>.Get();
+        }        
+        try
+		{
+            <% For i As Integer = 0 To SourceTable.NonPrimaryKeyColumns.Count - 1 
+             If SourceTable.NonPrimaryKeyColumns(i).Name = "CrDateTime" OR SourceTable.NonPrimaryKeyColumns(i).Name = "LastUpdated" OR SourceTable.NonPrimaryKeyColumns(i).Name = "CrUserId" OR SourceTable.NonPrimaryKeyColumns(i).Name = "LastUpdatedUserId" Then
+                        Continue For
+                    End If
+            %>
+                <% If SourceTable.NonPrimaryKeyColumns(i).AllowDbNull=false Then %>  
+                    <% If SourceTable.NonPrimaryKeyColumns(i).IsForeignKeyMember Or SourceTable.NonPrimaryKeyColumns(i).Description.EndsWith("(FK)") Then %>  
+            if(int.Parse(ddl<%= SourceTable.NonPrimaryKeyColumns(i).Name %>.SelectedItem.Value) <= 0)
+			{
+                JSAlertHelpers.Alert("Mời bạn nhập các thông tin bắt buộc!", this);
+                return;
+            }
+                    <% Else %>
+                        <% if SourceTable.NonPrimaryKeyColumns(i).DataType <> DbType.Boolean Then %>
+            if(tx<%= SourceTable.NonPrimaryKeyColumns(i).Name %>.Text == "")
+			{
+                JSAlertHelpers.Alert("Mời bạn nhập các thông tin bắt buộc!", this);
+                return;
+            }
+                        <% End If %> 
+                    <% End If %>
+                <% End If %> 
+            <% Next i %>  
+
+            
+            m_<%= SourceTable.Name %>.CrUserId = ActUserId;
+            <% For i As Integer = 0 To SourceTable.NonPrimaryKeyColumns.Count - 1 
+                    If SourceTable.NonPrimaryKeyColumns(i).Name = "CrDateTime" OR SourceTable.NonPrimaryKeyColumns(i).Name = "LastUpdated" OR SourceTable.NonPrimaryKeyColumns(i).Name = "CrUserId" OR SourceTable.NonPrimaryKeyColumns(i).Name = "LastUpdatedUserId" Then
+                        Continue For
+                    End If
+            %>
+            
+                <% If SourceTable.NonPrimaryKeyColumns(i).IsForeignKeyMember Or SourceTable.NonPrimaryKeyColumns(i).Description.EndsWith("(FK)") Then %>  
+            m_<%= SourceTable.Name %>.<%= SourceTable.NonPrimaryKeyColumns(i).Name %> = <%= SourceTable.NonPrimaryKeyColumns(i).SystemType %>.Parse(ddl<%= SourceTable.NonPrimaryKeyColumns(i).Name %>.SelectedItem.Value);
+                <% Else %>
+                    <% Select Case SourceTable.NonPrimaryKeyColumns(i).DataType %>
+                    <% Case DbType.Guid %> 
+                    <% Case DbType.Date, DbType.DateTime  %> 
+            m_<%= SourceTable.Name %>.<%= SourceTable.NonPrimaryKeyColumns(i).Name %> = DateTime.Parse(tx<%= SourceTable.NonPrimaryKeyColumns(i).Name %>.Text);            
+                    <% Case DbType.Boolean %>
+            m_<%= SourceTable.Name %>.<%= SourceTable.NonPrimaryKeyColumns(i).Name %> = chk<%= SourceTable.NonPrimaryKeyColumns(i).Name %>.Checked;
+                    <% Case DbType.Byte %>
+            m_<%= SourceTable.Name %>.<%= SourceTable.NonPrimaryKeyColumns(i).Name %> = byte.Parse(tx<%= SourceTable.NonPrimaryKeyColumns(i).Name %>.Text);
+                     <% Case DbType.Int16 %>
+            m_<%= SourceTable.Name %>.<%= SourceTable.NonPrimaryKeyColumns(i).Name %> = short.Parse(tx<%= SourceTable.NonPrimaryKeyColumns(i).Name %>.Text);
+                     <% Case DbType.Int32 %>
+            m_<%= SourceTable.Name %>.<%= SourceTable.NonPrimaryKeyColumns(i).Name %> = int.Parse(tx<%= SourceTable.NonPrimaryKeyColumns(i).Name %>.Text);
+                     <% Case DbType.Int64 %>
+            m_<%= SourceTable.Name %>.<%= SourceTable.NonPrimaryKeyColumns(i).Name %> = long.Parse(tx<%= SourceTable.NonPrimaryKeyColumns(i).Name %>.Text);
+                    <% Case Else %> 
+            m_<%= SourceTable.Name %>.<%= SourceTable.NonPrimaryKeyColumns(i).Name %> = tx<%= SourceTable.NonPrimaryKeyColumns(i).Name %>.Text;
+				
+                    <% End Select %> 
+                <% End If %> 
+            <% Next i %>  
+            
+            m_<%= SourceTable.Name %>.<%= SourceTable.PrimaryKey.MemberColumns(0).Name %> = EditId;
+            m_<%= SourceTable.Name %>.LanguageId = byte.Parse(ddlLanguage.SelectedValue);
+            m_<%= SourceTable.Name %>.ApplicationTypeId = byte.Parse(ddlAppType.SelectedValue);
+            SysMessageTypeId = m_<%= SourceTable.Name %>.InsertOrUpdate(ConstantHelpers.Replicated, ActUserId, ref SysMessageId);
+            
+            StringBuilder csText = new StringBuilder();
+            Type cstype = this.GetType();
+            ClientScriptManager cs = Page.ClientScript;
+            csText.Clear();
+            csText.Append("<script type=\"text/javascript\">");
+            csText.Append("window.parent.jQuery('#divEdit').dialog('close');");            
+            csText.Append("</script>");
+            cs = Page.ClientScript;
+            cs.RegisterClientScriptBlock(this.GetType(), "system_message", csText.ToString());
+		}
+        catch (Exception ex)
+		{
+			sms.utils.LogFiles.LogError(((new System.Diagnostics.StackTrace()).GetFrames()[0]).GetMethod().Name + "\t" + ex.ToString());
+			JSAlertHelpers.Alert(ex.Message, this);
+		}
+    }
+    
+   
+    
+ }
+   

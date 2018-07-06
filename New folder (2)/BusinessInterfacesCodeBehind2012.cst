@@ -1,0 +1,175 @@
+﻿<%------------------------------------------------------------------------------------------
+*  Developer:   huyht
+------------------------------------------------------------------------------------------%>
+<%@ CodeTemplate Language="VB" TargetLanguage="VB" Encoding="UTF-8" Description="Generates a very simple business object." %>
+<%@ Property Name="SourceTable" Type="SchemaExplorer.TableSchema" Category="Context" Description="Table that the object is based on." %> 
+<%@ Property Name="RootNamespace"  Type="System.String"  Default="" Category="Options" %> 
+<%@ Property Name="TablePrefix"  Type="System.String"  Default="" Category="Options" %>
+<%@ Assembly Name="SchemaExplorer" %>
+<%@ Assembly Name="System.Data" %>
+<%@ Import Namespace="SchemaExplorer" %>
+<%@ Import Namespace="System.Data" %>
+<%@ Map Name="DbDataReader" Src="DbType-DataReaderMethod" Description="DbType to DataReader Method Map" %>
+<%@ Map Name="SqlNativeSqlDb" Src="SqlNativeType-SqlDbType" Description="SqlNativeType to SqlDbType Map" %> 
+
+/* ********************************************************************************
+'     Document    :  <%= Me.TablePrefix %><%= SourceTable.Name %>.aspx.cs
+' ********************************************************************************/
+using System;
+using System.Data;
+using System.Configuration;
+using System.Collections;
+using System.Collections.Generic;
+using System.Web;
+using System.Web.Security;
+using System.Web.UI;
+using System.Web.UI.WebControls;
+using System.Web.UI.WebControls.WebParts;
+using System.Web.UI.HtmlControls;
+using System.Text;
+using System.Reflection;
+using System.IO;
+using ICSoft.CMSLib;
+using ICSoft.HelperLib;
+using sms.common;
+using sms.utils;
+
+public partial class page_admin_<%= SourceTable.Name %> : System.Web.UI.Page
+{	
+   
+    protected void Page_Load(object sender, EventArgs e)
+	{
+        
+		try
+        {
+          if (!IsPostBack)
+            {
+            <% For i As Integer = 0 To SourceTable.NonPrimaryKeyColumns.Count - 1 %>
+			<% If SourceTable.NonPrimaryKeyColumns(i).IsForeignKeyMember Then %>
+                <%= SourceTable.NonPrimaryKeyColumns(i).Name.Replace("Id","s") %>.bindDropDownList(ddl<%= SourceTable.NonPrimaryKeyColumns(i).Name %>, 0, " ... ");					
+			<% Else If SourceTable.NonPrimaryKeyColumns(i).Description.EndsWith("(FK)") Then %>
+				<%= SourceTable.NonPrimaryKeyColumns(i).Name.Replace("Id","s") %>.bindDropDownList(ddl<%= SourceTable.NonPrimaryKeyColumns(i).Name %>, 0, " ... ");					
+			<% End if %>
+			<% Next i %>  
+				ShowGrid();					
+            }
+        }
+        catch (Exception ex)
+        {
+        	Log.writeLog(ex.ToString(), ((new System.Diagnostics.StackTrace()).GetFrames()[0]).GetMethod().Name);
+			Alert(ex.Message);
+        }		
+    }
+    //--------------------------------------------------------------------------------
+    public void Alert(string Content)
+    {
+        JSAlertHelpers.Alert(Content, this);
+    }     
+    private void ShowGrid()
+	{
+        try
+		{
+            <%= SourceTable.Name %> m_<%= SourceTable.Name %> = new <%= SourceTable.Name %>();
+            m_<%= SourceTable.Name %>.<%= Left(SourceTable.Name,SourceTable.Name.Length-1) %>Name = txtSearch.Text;          
+            <% For i As Integer = 0 To SourceTable.NonPrimaryKeyColumns.Count - 1 %>
+                <% If SourceTable.NonPrimaryKeyColumns(i).IsForeignKeyMember Then %>
+            m_<%= SourceTable.Name %>.<%= SourceTable.NonPrimaryKeyColumns(i).Name%> = <%= SourceTable.NonPrimaryKeyColumns(i).SystemType %>.Parse(ddl<%= SourceTable.NonPrimaryKeyColumns(i).Name %>.SelectedValue);
+                <% Else If SourceTable.NonPrimaryKeyColumns(i).Description.EndsWith("(FK)") Then %>
+            m_<%= SourceTable.Name %>.<%= SourceTable.NonPrimaryKeyColumns(i).Name%> = <%= SourceTable.NonPrimaryKeyColumns(i).SystemType %>.Parse(ddl<%= SourceTable.NonPrimaryKeyColumns(i).Name %>.SelectedValue);
+                <% End if %>
+            <% Next i %> 
+            List<<%= SourceTable.Name %>>  l_<%= SourceTable.Name %> = m_<%= SourceTable.Name %>.<%= SourceTable.Name %>_Search("", "", ddlOrderBy.SelectedValue,m_grid.PageSize, CustomPaging.PageIndex - 1);
+        
+            m_grid.DataSource = l_<%= SourceTable.Name %>;
+            m_grid.DataBind();
+            lblTong.Text = m_<%= SourceTable.Name %>.RowCount.ToString();
+            CustomPaging.TotalPage = (m_<%= SourceTable.Name %>.RowCount == 0) ? 1 : (m_<%= SourceTable.Name %>.RowCount % m_grid.PageSize == 0) ? m_<%= SourceTable.Name %>.RowCount / m_grid.PageSize : (m_<%= SourceTable.Name %>.RowCount - m_<%= SourceTable.Name %>.RowCount % m_grid.PageSize) / m_grid.PageSize + 1;
+		}
+        catch (Exception ex)
+		{
+			Log.writeLog(ex.ToString(), ((new System.Diagnostics.StackTrace()).GetFrames()[0]).GetMethod().Name);
+			Alert(ex.Message);
+		}
+    }
+    // End Show Grid      
+    
+    
+    protected void m_grid_RowDeleting(object sender, GridViewDeleteEventArgs e)
+	{
+        string message = "";       
+		try
+		{
+             <%= SourceTable.Name %> m_<%= SourceTable.Name %> = new <%= SourceTable.Name %>();
+            m_<%= SourceTable.Name %>.<%= SourceTable.PrimaryKey.MemberColumns(0).Name %> = <%= SourceTable.PrimaryKey.MemberColumns(0).SystemType %>.Parse(m_grid.DataKeys[e.RowIndex].Value.ToString());
+            m_<%= SourceTable.Name %>.<%= SourceTable.Name %>_Delete();
+            
+            if(m_<%= SourceTable.Name %>.m_SysMessages.SysMessageTypeId != 1)
+			{
+				message =  m_<%= SourceTable.Name %>.m_SysMessages.Get(m_<%= SourceTable.Name %>.m_SysMessages.SysMessageId).SysMessageDesc;   
+                Alert(message);
+				return;
+			}
+            
+		}
+        catch (Exception ex)
+		{
+			Log.writeLog(ex.ToString(), ((new System.Diagnostics.StackTrace()).GetFrames()[0]).GetMethod().Name);
+			Alert(ex.Message);
+		}
+        ShowGrid();
+    }
+       
+    protected void ddlOrderBy_SelectedIndexChanged(object sender, System.EventArgs e)
+	{
+       ShowGrid();
+    }
+
+    <% For i As Integer = 0 To SourceTable.NonPrimaryKeyColumns.Count - 1 %>  
+        <% If SourceTable.NonPrimaryKeyColumns(i).IsForeignKeyMember Or SourceTable.NonPrimaryKeyColumns(i).Description.EndsWith("(FK)") Then %>
+    protected void ddl<%= SourceTable.NonPrimaryKeyColumns(i).Name %>_SelectedIndexChanged(object sender, System.EventArgs e)
+	{       
+        ShowGrid();
+    }
+        <% End If %>
+    <% Next i %>
+    
+    protected void btnSearch_Click(object sender, System.EventArgs e)
+	{       
+        ShowGrid();
+    }
+	protected void lbDelete_Click(object sender, EventArgs e)
+    {
+        try
+		{
+            <%= SourceTable.Name %> m_<%= SourceTable.Name %> = new <%= SourceTable.Name %>();
+            foreach(GridViewRow m_Row in m_grid.Rows)
+			{
+                CheckBox chkAction = (CheckBox)m_Row.FindControl("chkAction");
+                if(chkAction != null)
+				{
+                    if(chkAction.Checked)
+					{
+                        m_<%= SourceTable.Name %>.<%= SourceTable.PrimaryKey.MemberColumns(0).Name %> = <%= SourceTable.PrimaryKey.MemberColumns(0).SystemType %>.Parse(m_grid.DataKeys[m_Row.RowIndex].Value.ToString());
+                        m_<%= SourceTable.Name %>.<%= SourceTable.Name %>_Delete();
+						break;
+                    }
+                }
+            }           
+            ShowGrid();
+		}
+        catch (Exception ex)
+		{
+			Log.writeLog(ex.ToString(), ((new System.Diagnostics.StackTrace()).GetFrames()[0]).GetMethod().Name);
+			Alert(ex.Message);
+		}
+    }
+    protected void lbUnCheck_Click(object sender, EventArgs e)
+    {
+
+    }
+    protected void lbReview_Click(object sender, EventArgs e)
+    {
+
+    }
+ }
+   
